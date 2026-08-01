@@ -13,25 +13,31 @@ took an afternoon of reading shaders. The art census answers it in one glance.
 
 ## Running it
 
-Standalone on purpose — sbslib only, **no LM mastlibs**, so there is no rebuild step
-between an edit and a look. The mission ships its own server stage and client viewport.
-
 ```
 # from data/missions
 python -m cosmos_dev.mission_runner VisualTestRange --gui
-    then open http://localhost:8765/server      picker + view + card
+    then open http://localhost:8765/server      picker, then view + card
     and (only for the per-client specimens)     http://localhost:8765/client
 
 python -m cosmos_dev.mission_runner VisualTestRange --gui --map visual_blackhole
-python -m cosmos_dev.mission_runner VisualTestRange --map visual_all --test 100
+python -m cosmos_dev.mission_runner VisualTestRange --map visual_all --test 150
 ```
 
 The last form is headless: no picture, but every specimen's machine-checkable half still
 runs and prints `VISUAL PASS` / `VISUAL FAIL`, so the data regressions (a body that stopped
 streaming, an art root that stopped resolving) are CI-able even though the picture is not.
 
-The server tab is the stage: **Prev / Re-run / Next** walk the specimens without restarting
-the runner, and the card repaints with each one.
+The server tab opens on the **mission picker**, which comes from the
+`LegendaryMissions.consoles` mastlib — the same way LM Test Range gets one. Nothing here
+draws it: `server_console` lists the `@map` roster, applies the map's Defaults, launches the
+choice and handles `--map` / `AUTO_START`. Pick a specimen and the tab becomes the stage,
+where **Prev / Re-run / Next** walk the rest without restarting the runner and the card
+repaints with each one.
+
+The cost, and it is the same one LM Test Range pays: the range loads the **built** LM
+mastlibs, so a working-tree LM edit is not visible until you rebuild —
+`python sbs.pyz lib LegendaryMissions`. Edits to the range's own `.mast` files need no
+rebuild.
 
 ## Specimens
 
@@ -127,10 +133,13 @@ a `for _i`, and the census's `for _i` resumed *that* iterator at 1 of 11. Every 
 mission has its own variable name. Suspect this whenever a loop silently runs the wrong
 number of times.
 
-**The runner double-launches a map unless the story sets `GAME_STARTED`.** `--map <name>`
+**The runner double-launches a map unless something sets `GAME_STARTED`.** `--map <name>`
 hands the launch to the story via `WORLD_SELECT` + `AUTO_START`, then falls back to its own
 auto-start if `GAME_STARTED` never appears — so the sweep ran twice, interleaved, one copy
-resetting the sim while the other was mid-spawn. `visual_autostart` sets the flag.
+resetting the sim while the other was mid-spawn. The consoles addon's `start` label sets the
+flag, which is one more reason not to hand-roll the launch. A headless run logs `map started
+by the server console` when the addon won the race; if you ever see the map run twice, that
+line is the first thing to check for.
 
 ## Known gaps
 
@@ -140,8 +149,17 @@ resetting the sim while the other was mid-spawn. `visual_autostart` sets the fla
 - **`visual_fx_client_scope` needs two tabs** and is the only specimen that cannot be judged
   from the server alone.
 - **No capture button.** Saving the canvas plus the HUD to a PNG belongs in
-  `cosmos_dev/mockgui`, which another session owns right now; until then, a finding travels
-  as a screenshot you take.
+  `cosmos_dev/mockgui`; until then, a finding travels as a screenshot you take. (This was
+  blocked on a parallel session owning those files; it has since landed, so it is now free
+  to do.)
+- **The backdrop is a flat neutral fill.** The mock's procedural starfield is gone — every
+  star the same size and brightness read as static and swallowed dark hulls, which is
+  intolerable in a range whose job is judging art. Both renderers draw a real cube-cross
+  skybox when a mission sets one, and `start_server` does call `skybox_schedule_random()` —
+  but the `consoles` mastlib declares no `@media/skybox` labels (those live in LM's
+  `basic_random_skybox`), so today there is nothing for it to pick and the fill stays. Add
+  that mastlib, or declare the labels here, if a specimen should be judged against a real
+  sky. Neutral is the better default for the art specimens either way.
 - **Nothing here has run in the engine yet.** That is the whole point of the range being
   engine-runnable, and it is the next thing worth doing — starting with `visual_blackhole`,
   which exists to answer whether the engine draws a maelstrom in 3D at all.
