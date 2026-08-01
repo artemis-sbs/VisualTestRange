@@ -1,0 +1,56 @@
+# SPECIMEN: gas giants.
+#
+# Four planets that differ in ONE knob each, so any difference on screen is attributable.
+# The engine draws these with shader-gasgiant.ps and no mesh; the mock's 3dview is a port of
+# that shader's renderSurface(). This is the specimen that says whether the port holds -
+# put the engine and the mock side by side and the four should read the same way.
+#
+# The seed pair matters most: the shader has no seed input, so per-planet variety is faked
+# by rotating the sample direction with an angle derived from the COLORS. Two planets that
+# differ only in base color must therefore show different band and cloud patterns, not the
+# same face in two paints. That is the thing to actually look at here.
+
+@map/visual_planet "Visual: gas giants"
+" Four planets, one knob apart each: palette, seed-by-color, bands, clouds on.
+    visual_set_index_by_name("planet")
+    await task_schedule(run_visual_planet)
+    ->END
+
+
+=== run_visual_planet
+metadata: ``` yaml
+type: visual/planet
+```
+    _gap = 3600
+    _r = 1200
+
+    # 1 - the LM prefab_planetoid palette, unchanged. The reference.
+    _p1 = visual_planet_spawn(0 - _gap * 1.5, 0, 0, radius=_r, name="Planetoid")
+
+    # 2 - same as 1 except the BASE COLOR. Different color -> different seed angle -> the
+    # bands and clouds must land differently, not just be tinted differently.
+    _p2 = visual_planet_spawn(0 - _gap * 0.5, 0, 0, radius=_r, base=(0.20, 0.42, 0.55), name="Seed shift")
+
+    # 3 - same as 1 except bandScale, which is the stripe FREQUENCY.
+    _p3 = visual_planet_spawn(_gap * 0.5, 0, 0, radius=_r, band=9.5, name="Bands x9.5")
+
+    # 4 - clouds ON. upperCloudExponent acts as a boolean: >= 1 is off (what 1, 2 and 3 use
+    # at 3.96), below 1 is on. This is the only one that should look overcast.
+    _p4 = visual_planet_spawn(_gap * 1.5, 0, 0, radius=_r, cloud_exponent=0.5, cloud_strength=6.0, name="Clouds on")
+
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, eye=(0, 1800, 0 - 11000))
+
+    _expect = ~~[
+        "four banded spheres in a row, all the same size",
+        "1 and 2 differ in PATTERN as well as color - not the same face repainted",
+        "3 has visibly narrower, more numerous stripes than 1",
+        "4 is the only overcast one (clouds on); 1, 2 and 3 show clean bands",
+        "each has a lit side and a dark side, with a soft rim where the atmosphere catches",
+    ]~~
+    visual_case("Gas giants", _expect, subtitle="shader-gasgiant.ps - engine vs mock should agree", notes="1 is the reference; 2, 3 and 4 each change exactly one knob", data=f"radius {_r}, spacing {_gap}, bandScale 3.72 except #3 at 9.5")
+
+    visual_expect("planet: all four spawned", _p1 and _p2 and _p3 and _p4)
+    visual_expect("planet: radius reaches the data_set", get_data_set_value(_p1, "planet_radius", 0) == _r)
+    visual_expect("planet: seed pair really differs only in color", get_data_set_value(_p1, "planet_bandScale", 0) == get_data_set_value(_p2, "planet_bandScale", 0))
+    ->END

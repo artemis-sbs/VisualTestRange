@@ -1,0 +1,72 @@
+# SPECIMEN: nebula volumes.
+#
+# A nebula is the other body with no mesh - a raymarched volume driven by emission and
+# scattering colors, density, swirl and domain warp. The colors recently became true
+# per-color templates rather than one shared preset, so the thing to check is that the row
+# reads as DIFFERENT clouds, not one cloud in several tints.
+#
+# Density is the second axis: it drives both particle count and opacity, so the pair at the
+# end should differ in substance, not just brightness.
+
+@map/visual_nebula "Visual: nebulae"
+" A row of color presets, then the same cloud at three densities.
+    visual_set_index_by_name("nebula")
+    await task_schedule(run_visual_nebula)
+    ->END
+
+
+=== run_visual_nebula
+metadata: ``` yaml
+type: visual/nebula
+```
+    _gap = 5200
+    _size = 1800
+
+    # Row 1 - five presets. Emission is the self-glow core, scattering the second tint.
+    _cols = ~~[
+        [0.75, 0.30, 0.85],
+        [0.25, 0.55, 0.95],
+        [0.95, 0.45, 0.20],
+        [0.30, 0.85, 0.45],
+        [0.90, 0.85, 0.35],
+    ]~~
+    _x0 = 0 - (len(_cols) - 1) * _gap / 2
+    for _pi in range(len(_cols)):
+        _n = to_object(terrain_spawn(_x0 + _pi * _gap, 0, 0, f"neb{_pi}", "#,visual_nebula", "nebula", "behav_nebula"))
+        if _n is not None:
+            _c = _cols[_pi]
+            _n.data_set.set("size", _size, 0)
+            _n.data_set.set("density", 7, 0)
+            _n.data_set.set("random_seed", 100 + _pi * 37, 0)
+            _n.data_set.set("emission_red", _c[0])
+            _n.data_set.set("emission_green", _c[1])
+            _n.data_set.set("emission_blue", _c[2])
+            _n.data_set.set("scattering_red", _c[2])
+            _n.data_set.set("scattering_green", _c[0])
+            _n.data_set.set("scattering_blue", _c[1])
+
+    # Row 2 - one color, three densities. The ruler for "density is doing something".
+    _dens = ~~[2, 8, 18]~~
+    for _di in range(len(_dens)):
+        _n2 = to_object(terrain_spawn(0 - _gap + _di * _gap, 0, 7000, f"dens{_dens[_di]}", "#,visual_nebula", "nebula", "behav_nebula"))
+        if _n2 is not None:
+            _n2.data_set.set("size", _size, 0)
+            _n2.data_set.set("density", _dens[_di], 0)
+            _n2.data_set.set("random_seed", 900, 0)
+            _n2.data_set.set("emission_red", 0.55)
+            _n2.data_set.set("emission_green", 0.50)
+            _n2.data_set.set("emission_blue", 0.85)
+
+    _anchor = visual_anchor(0, 0, 3500)
+    visual_camera(_anchor, eye=(0, 4000, 0 - 13000))
+
+    _expect = ~~[
+        "front row: five clouds in five colors, each with its OWN internal shape",
+        "they are volumes, not flat discs - the structure changes as you look into them",
+        "back row: the same cloud at three densities, thin to thick",
+        "the thin one is wispy enough to see through; the thick one is not",
+    ]~~
+    visual_case("Nebulae", _expect, subtitle="per-color templates, and density doing work", notes="front row shares size and density and differs only in color and seed", data=f"size {_size}, densities 2 / 8 / 18")
+
+    visual_expect("nebula: presets spawned", len(to_object_list(role("visual_nebula"))) == len(_cols) + len(_dens))
+    ->END

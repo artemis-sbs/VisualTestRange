@@ -1,0 +1,54 @@
+# SPECIMEN: combat FX are scoped to what a client can actually see.
+#
+# The mock culls the FX stream per client's ship, so a fight on the far side of the map is
+# not streamed to a console that cannot see it. That is invisible from one viewpoint by
+# definition - you cannot tell "correctly culled" from "not drawn" without a second window
+# showing the same moment.
+#
+# Two fights, further apart than the cull radius (35000u). Open the server tab AND a client
+# tab: the server is the GM view and sees both; the client is assigned to the ship at fight
+# A and must see A only.
+
+@map/visual_fx_client_scope "Visual: FX client scope"
+" Two fights, far apart. Needs two browser tabs - the point is what they DISAGREE about.
+    visual_set_index_by_name("fx_client_scope")
+    await task_schedule(run_visual_fx_client_scope)
+    ->END
+
+
+=== run_visual_fx_client_scope
+metadata: ``` yaml
+type: visual/fx_client_scope
+```
+    _far = 60000
+
+    # Fight A - the client rides this one. The role is how the viewport console finds it.
+    _pa = to_object(player_spawn(0, 0, 0, "Near", "tsn", "tsn_battle_cruiser"))
+    _ea = to_object(npc_spawn(900, 0, 600, "RaiderA", "raider", "kralien_cruiser", "behav_npcship"))
+    # Fight B - same fight, far enough away to be culled for anyone at A.
+    _pb = to_object(npc_spawn(_far, 0, 0, "Far", "tsn", "tsn_battle_cruiser", "behav_npcship"))
+    _eb = to_object(npc_spawn(_far + 900, 0, 600, "RaiderB", "raider", "kralien_cruiser", "behav_npcship"))
+    ->END if _pa is None or _pb is None
+
+    add_role(_pa.id, "visual_client_ship")
+    target(_pa.id, _ea.id, True, 0.0)
+    target(_ea.id, _pa.id, True, 0.0)
+    target(_pb.id, _eb.id, True, 0.0)
+    target(_eb.id, _pb.id, True, 0.0)
+
+    # Frame fight A; fight B is off-camera on purpose - this specimen is about the STREAM,
+    # not the framing, and the HUD beam/projectile census is where you read it.
+    _anchor = visual_anchor(450, 0, 300)
+    visual_camera(_anchor, eye=(0, 1600, 0 - 3000))
+
+    _expect = ~~[
+        "server tab: both fights are streamed (the GM view is never culled)",
+        "client tab assigned to Near: fight A's beams only",
+        "the client's HUD beam census must NOT count fight B's firer",
+        "swap the client to the Far ship and the two invert",
+    ]~~
+    visual_case("FX client scope", _expect, subtitle="needs a second browser tab to judge", notes="open http://localhost:8765/client alongside /server", data=f"fights {_far}u apart, cull radius 35000u")
+
+    visual_expect("fx scope: fights are beyond the cull radius", _far > 35000)
+    visual_expect("fx scope: a client ship is tagged", len(to_object_list(role("visual_client_ship"))) == 1)
+    ->END

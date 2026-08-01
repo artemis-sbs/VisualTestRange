@@ -1,0 +1,53 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Dbg w/Gui (picker)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cosmos_dev.mission_runner",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/../VisualTestRange",
+            "envFile": "${workspaceFolder}/../VisualTestRange/.env",
+            "args": [".", "--gui"],
+            "subProcess": false
+        },
+        {
+            "name": "Dbg w/Gui: visual_blackhole",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cosmos_dev.mission_runner",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/../VisualTestRange",
+            "envFile": "${workspaceFolder}/../VisualTestRange/.env",
+            "args": [".", "--gui", "--map", "visual_blackhole"],
+            "subProcess": false
+        },
+        {
+            "name": "Dbg no Gui (visual_all sweep)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cosmos_dev.mission_runner",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/../VisualTestRange",
+            "envFile": "${workspaceFolder}/../VisualTestRange/.env",
+            "args": [".", "--map", "visual_all", "--test", "100"],
+            "subProcess": false
+        },
+
+        // --- MAST source debugger (breakpoints in .mast) --------------------
+        // One click: the "Artemis AMD" extension launches the mission (sbs debug),
+        // attaches the MAST debugger, and stops the runner when you end the
+        // session - no task, no manual cleanup. See
+        // sbs_utils/mkdocs/docs/tooling/mast-debugger.md
+        {
+            "name": "MAST: Debug mission (one click)",
+            "type": "mast",
+            "request": "launch",
+            "mission": "${workspaceFolder}/../VisualTestRange",
+            "map": "visual_blackhole"
+        }
+
+    ]
+}

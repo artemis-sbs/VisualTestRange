@@ -1,0 +1,54 @@
+# SPECIMEN: the scale ladder.
+#
+# Settles size arguments with a picture instead of arithmetic. "Is a wreck too small?" came
+# up and got answered by multiplying meshscale by the mesh extent - correct, and completely
+# unpersuasive. Everything that has a canonical size stands in one line here, nose to tail,
+# at a known spacing, so relative scale is read rather than computed.
+#
+# The wreck is the one worth staring at: 262 units of mesh at meshscale 0.06 puts it around
+# a fifth of a light cruiser - small, but it must not be a speck, and it must not be absent.
+
+@map/visual_scale_ladder "Visual: scale ladder"
+" Wreck, rock, fighter, cruiser, battleship, station, worldlet - in one line.
+    visual_set_index_by_name("scale_ladder")
+    await task_schedule(run_visual_scale_ladder)
+    ->END
+
+
+=== run_visual_scale_ladder
+metadata: ``` yaml
+type: visual/scale_ladder
+```
+    _gap = 1400
+    _x = 0 - _gap * 3
+
+    _wreck = terrain_spawn(_x, 0, 0, "Wreck", "#,ladder", "wreck", "behav_wreck")
+    _x = _x + _gap
+    _rock = terrain_spawn(_x, 0, 0, "Asteroid", "#,ladder", "plain_asteroid_6", "behav_asteroid")
+    _x = _x + _gap
+    _fighter = npc_spawn(_x, 0, 0, "Fighter", "tsn", "tsn_fighter", "behav_npcship")
+    _x = _x + _gap
+    _cruiser = npc_spawn(_x, 0, 0, "Light cruiser", "tsn", "tsn_light_cruiser", "behav_npcship")
+    _x = _x + _gap
+    _battle = npc_spawn(_x, 0, 0, "Battleship", "tsn", "tsn_battleship", "behav_npcship")
+    _x = _x + _gap
+    _base = npc_spawn(_x, 0, 0, "Starbase", "tsn", "starbase_command", "behav_station")
+
+    # The worldlet sits well clear and behind: at radius 1200 it would swallow the line.
+    _world = visual_planet_spawn(0, 0, 9000, radius=1200, name="Worldlet")
+
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, eye=(0, 900, 0 - 6500))
+
+    _expect = ~~[
+        "seven subjects, left to right: wreck, rock, fighter, cruiser, battleship, starbase",
+        "the wreck is SMALL but plainly a hulk - not a dot, not missing",
+        "the fighter is the smallest ship and clearly smaller than the cruiser",
+        "the starbase towers over every ship",
+        "the worldlet behind them all dwarfs the starbase",
+    ]~~
+    visual_case("Scale ladder", _expect, notes="1400u apart on a line; nothing here is scaled for the picture", data="wreck 262u mesh at meshscale 0.06 = about 16u; light cruiser about 52u")
+
+    visual_expect("ladder: wreck spawned", to_object(_wreck) is not None)
+    visual_expect("ladder: every rung spawned", to_object(_rock) is not None and to_object(_fighter) is not None and to_object(_cruiser) is not None and to_object(_battle) is not None and to_object(_base) is not None)
+    ->END

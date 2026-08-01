@@ -1,0 +1,6 @@
+format version: 1
+Category: Test
+Category Priority: C
+Visible Mission Name: Visual Test Range
+Description: Framed specimens for confirming what the renderer actually draws.
+Keywords: test, visual, render, dev

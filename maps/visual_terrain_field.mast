@@ -1,0 +1,58 @@
+# SPECIMEN: terrain, and the per-object scale coefficients.
+#
+# Terrain is the quietest failure in the view. When the mock's gather filter read an unset
+# icon_index as "this is a 2D marker", EVERY rock stopped rendering: no error, no warning,
+# just an empty belt that looked like a design choice. It also silently moved the orbit
+# camera onto the field's centre of mass.
+#
+# Two things to see: every asteroid art draws, and the per-object local_scale coefficients
+# actually reach the mesh. shipData gives a rock meshscale 0.5 (about 20u); terrain.py then
+# multiplies by a local_scale coefficient of roughly 2.5 to 15. Miss that and rocks are
+# drawn 5 to 30 times too small - present, but reading as absent.
+
+@map/visual_terrain_field "Visual: terrain field"
+" Every asteroid art, plus a row showing the local_scale coefficients doing their job.
+    visual_set_index_by_name("terrain_field")
+    await task_schedule(run_visual_terrain_field)
+    ->END
+
+
+=== run_visual_terrain_field
+metadata: ``` yaml
+type: visual/terrain_field
+```
+    # Row 1 - one of each asteroid art at its plain shipData size (no coefficient).
+    _arts = ~~[
+        "asteroid_crystal_blue", "asteroid_crystal_red", "asteroid_crystal_yellow",
+        "asteroid_crystal_silver", "asteroid_crystal_green", "plain_asteroid_6",
+        "plain_asteroid_7", "plain_asteroid_8", "plain_asteroid_9", "plain_asteroid_10",
+        "plain_asteroid_11",
+    ]~~
+    _gap = 700
+    _x0 = 0 - (len(_arts) - 1) * _gap / 2
+    for _ai in range(len(_arts)):
+        terrain_spawn(_x0 + _ai * _gap, 0, 0, _arts[_ai], "#,field", _arts[_ai], "behav_asteroid")
+
+    # Row 2 - the SAME art at four local_scale coefficients. This row is the ruler: if all
+    # four are the same size, the coefficients are not reaching the mesh.
+    _coeffs = ~~[1, 4, 8, 15]~~
+    for _si in range(len(_coeffs)):
+        _r = to_object(terrain_spawn(0 - 2700 + _si * 1800, 0, 3000, f"x{_coeffs[_si]}", "#,field,scaled", "plain_asteroid_6", "behav_asteroid"))
+        if _r is not None:
+            _r.data_set.set("local_scale_x_coeff", _coeffs[_si], 0)
+            _r.data_set.set("local_scale_y_coeff", _coeffs[_si], 0)
+            _r.data_set.set("local_scale_z_coeff", _coeffs[_si], 0)
+
+    _anchor = visual_anchor(0, 0, 1500)
+    visual_camera(_anchor, eye=(0, 3000, 0 - 6000))
+
+    _expect = ~~[
+        "front row: eleven DIFFERENT rocks - crystals and plain, not eleven of one shape",
+        "back row: four copies of one rock, each visibly bigger than the last",
+        "the back row's largest is many times the front row's rocks",
+        "no rock is missing, and none is a gray placeholder sphere",
+    ]~~
+    visual_case("Terrain field", _expect, subtitle="art variety, and local_scale reaching the mesh", notes="back row coefficients are 1, 4, 8, 15 on the same art", data=f"{len(_arts)} arts at {_gap}u, 4 scaled copies")
+
+    visual_expect("terrain: scaled row carries its coefficients", get_data_set_value(to_id(_r), "local_scale_x_coeff", 0) == 15)
+    ->END

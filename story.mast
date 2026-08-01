@@ -1,0 +1,78 @@
+# Visual Test Range - framed specimens for confirming what the renderer actually draws.
+#
+# LM Test Range asserts BEHAVIOR headlessly. This range is the opposite case: the things
+# only an eye can settle. Each specimen is one subject, framed identically every run, with
+# a card on screen saying what a correct frame shows - so a wrong result is visible without
+# reading any code, and anyone can judge it, not just whoever wrote it.
+#
+# Standalone on purpose: sbslib only, no LM mastlibs, so there is no rebuild step between
+# an edit and a look. The mission ships its own server picker and client console.
+#
+#     python -m cosmos_dev.mission_runner VisualTestRange --gui
+#         then open http://localhost:8765/server   (picker + view + card)
+#     python -m cosmos_dev.mission_runner VisualTestRange --gui --map visual_blackhole
+#     python -m cosmos_dev.mission_runner VisualTestRange --map visual_art_census --test 20
+#
+# The last form is headless: no picture, but the VISUAL PASS/FAIL checks still run, so the
+# data half of every specimen is CI-able even though the picture is not.
+
+import maps/visual_harness.py
+import maps/visual_console.mast
+import maps/visual_all.mast
+
+# --- specimens -------------------------------------------------------------
+import maps/visual_art_census.mast
+import maps/visual_blackhole.mast
+import maps/visual_planet.mast
+import maps/visual_torpedo.mast
+import maps/visual_beam_arcs.mast
+import maps/visual_fx_client_scope.mast
+import maps/visual_terrain_field.mast
+import maps/visual_scale_ladder.mast
+import maps/visual_nebula.mast
+import maps/visual_motion.mast
+import maps/visual_shield_rings.mast
+
+
+== visual_server_start ==
+    # A tool mission: no connect dialog, and a sim we control from a known blank state.
+    sbs.suppress_client_connect_dialog(0)
+    sim_create()
+    sim_resume()
+
+    # Two sides is all any specimen needs (a friendly and something to shoot at). Registered
+    # once here because they are the baseline visual_reset() deliberately keeps.
+    side_ensure("tsn", "TSN")
+    side_ensure("raider", "Raider")
+    side_set_relations("tsn", "raider", sbs.DIPLOMACY.HOSTILE)
+
+    # How long visual_all holds each specimen on screen before building the next.
+    shared VISUAL_HOLD_SECONDS = 6
+    default shared SETTINGS = settings_get_defaults()
+
+    task_schedule(visual_autostart)
+    jump visual_stage
+
+
+=== visual_autostart
+    # Honor a map chosen outside the stage: `--map <name>` (the runner writes WORLD_SELECT +
+    # AUTO_START into the settings) and the engine's own map selection both arrive this way.
+    # Without it the range just opens on the stage, which is the normal way in.
+    ->END if not SETTINGS.get("AUTO_START", False)
+    _want = SETTINGS.get("WORLD_SELECT")
+    ->END if _want is None
+    for _m in maps_get_list():
+        if _m.path == _want:
+            # The handshake the dev runner watches for: without GAME_STARTED it assumes the
+            # story never launched, and starts the map a SECOND time. Two copies of a
+            # specimen sweep interleave - one resets the sim while the other is mid-spawn.
+            shared GAME_STARTED = True
+            task_schedule(_m)
+            ->END
+    log(f"visual: no @map matched WORLD_SELECT {_want}", "visual")
+    ->END
+
+
+== visual_client_start ==
+    # A client is only ever a second viewport onto whatever the server is showing.
+    jump visual_viewport

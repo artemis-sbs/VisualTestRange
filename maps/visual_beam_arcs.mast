@@ -1,0 +1,60 @@
+# SPECIMEN: beam emitter arcs.
+#
+# A beam only draws when the target falls inside SOME emitter's arc. That gate is invisible
+# in a real fight - a beam that should not have fired looks like a beam, and a beam wrongly
+# suppressed looks like a lull. Here the same shooter geometry is repeated with the target
+# at three different bearings, so the arcs are read off the picture directly.
+#
+# Stations are the shooters on purpose: they do not turn, so the bearing stays the bearing.
+# A ship ordered to fire would swing its nose onto the target and every case would collapse
+# into "dead ahead".
+
+@map/visual_beam_arcs "Visual: beam arcs"
+" Three fixed shooters, target dead ahead / abeam / dead astern.
+    visual_set_index_by_name("beam_arcs")
+    await task_schedule(run_visual_beam_arcs)
+    ->END
+
+
+=== run_visual_beam_arcs
+metadata: ``` yaml
+type: visual/beam_arcs
+```
+    _sep = 9000
+    _range = 1100
+
+    # Case 1 - target DEAD AHEAD (+Z from the station).
+    _s1 = to_object(npc_spawn(0 - _sep, 0, 0, "Ahead", "tsn", "starbase_command", "behav_station"))
+    _t1 = to_object(npc_spawn(0 - _sep, 0, _range, "T1", "raider", "kralien_cruiser", "behav_npcship"))
+    # Case 2 - target ABEAM (+X).
+    _s2 = to_object(npc_spawn(0, 0, 0, "Abeam", "tsn", "starbase_command", "behav_station"))
+    _t2 = to_object(npc_spawn(_range, 0, 0, "T2", "raider", "kralien_cruiser", "behav_npcship"))
+    # Case 3 - target DEAD ASTERN (-Z).
+    _s3 = to_object(npc_spawn(_sep, 0, 0, "Astern", "tsn", "starbase_command", "behav_station"))
+    _t3 = to_object(npc_spawn(_sep, 0, 0 - _range, "T3", "raider", "kralien_cruiser", "behav_npcship"))
+
+    ->END if _s1 is None or _s2 is None or _s3 is None
+
+    # Hold every target still, so the bearing under test does not drift while you look at it.
+    target(_s1.id, _t1.id, True, 0.0)
+    target(_s2.id, _t2.id, True, 0.0)
+    target(_s3.id, _t3.id, True, 0.0)
+    target(_t1.id, _s1.id, False, 0.0)
+    target(_t2.id, _s2.id, False, 0.0)
+    target(_t3.id, _s3.id, False, 0.0)
+
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, eye=(0, 7000, 0 - 7000))
+
+    _expect = ~~[
+        "left pair (dead ahead): beams reach the target",
+        "middle pair (abeam): beams reach the target only if an emitter's arc covers the beam",
+        "right pair (dead astern): NO beam - the target is behind every emitter",
+        "beams pulse rather than burn steadily - roughly 0.75s lit in a 6s cycle",
+        "every beam starts at an emitter on the hull, not at the model's center",
+    ]~~
+    visual_case("Beam arcs", _expect, subtitle="the arc gate is what makes a beam legal", notes="stations, because they do not turn to face the target", data=f"three pairs {_sep}u apart, target at {_range}u")
+
+    visual_expect("beams: three shooters aimed", get_data_set_value(_s1.id, "target_id", 0) == _t1.id and get_data_set_value(_s3.id, "target_id", 0) == _t3.id)
+    visual_expect("beams: astern target really is behind the shooter", _t3.pos.z < _s3.pos.z)
+    ->END

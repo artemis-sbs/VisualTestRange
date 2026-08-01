@@ -1,0 +1,65 @@
+# SPECIMEN: motion - speed calibration and smoothness.
+#
+# Physics runs at 30Hz, the view at 60, and the browser dead-reckons between updates. When
+# that easing is wrong the symptom is not an error, it is a ship that stutters - and nobody
+# can quantify a stutter from memory. Three ships crossing a gridded field, at speeds that
+# are documented numbers rather than feelings.
+#
+# The engine calibration: an NPC does throttle x 36 u/s x its hull speed coefficient. A
+# player is hull-INDEPENDENT: impulse is throttle x 180, and warp is 180 + (throttle-1) x 450,
+# so throttle 3 is 1080 u/s - six times the NPC. Speed also ramps in with a first-order lag;
+# nothing here should snap to speed instantly.
+
+@map/visual_motion "Visual: motion"
+" Three ships crossing at documented speeds, over the reference grid.
+    visual_set_index_by_name("motion")
+    await task_schedule(run_visual_motion)
+    ->END
+
+
+=== run_visual_motion
+metadata: ``` yaml
+type: visual/motion
+```
+    _lane = 1200
+    _from = 0 - 9000
+    _to = 9000
+
+    # Lane 1 - NPC at full throttle. About 36 u/s times its speed coefficient.
+    _npc = to_object(npc_spawn(_from, 0, 0 - _lane, "NPC full", "tsn", "tsn_light_cruiser", "behav_npcship"))
+    # Lane 2 - NPC at half throttle, same hull: the controlled comparison.
+    _half = to_object(npc_spawn(_from, 0, 0, "NPC half", "tsn", "tsn_light_cruiser", "behav_npcship"))
+    # Lane 3 - a player ship under impulse, which ignores the hull coefficient entirely.
+    _play = to_object(player_spawn(_from, 0, _lane, "Player impulse", "tsn", "tsn_battle_cruiser"))
+
+    ->END if _npc is None or _half is None or _play is None
+
+    # Steer by destination, not by target: nothing here is a fight.
+    _npc.data_set.set("target_pos_x", _to, 0)
+    _npc.data_set.set("target_pos_y", 0, 0)
+    _npc.data_set.set("target_pos_z", 0 - _lane, 0)
+    _npc.data_set.set("throttle", 1.0, 0)
+    _half.data_set.set("target_pos_x", _to, 0)
+    _half.data_set.set("target_pos_y", 0, 0)
+    _half.data_set.set("target_pos_z", 0, 0)
+    _half.data_set.set("throttle", 0.5, 0)
+    _play.data_set.set("target_pos_x", _to, 0)
+    _play.data_set.set("target_pos_y", 0, 0)
+    _play.data_set.set("target_pos_z", _lane, 0)
+    _play.data_set.set("playerThrottle", 1.0, 0)
+
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, eye=(0, 5200, 0 - 7000))
+
+    _expect = ~~[
+        "three ships crossing left to right, each in its own lane",
+        "movement is SMOOTH - no stutter, no teleporting between positions",
+        "the half-throttle NPC covers about half the ground of the full-throttle one",
+        "the player ship is far faster than either NPC",
+        "all three ramp up to speed rather than starting at full speed",
+    ]~~
+    visual_case("Motion", _expect, subtitle="30Hz physics eased to 60Hz - stutter shows here", notes="press b to toggle the reference grid; it makes speed differences legible", data="NPC 36 u/s x coeff x throttle; player impulse 180 u/s, hull-independent")
+
+    visual_expect("motion: throttles are set as intended", get_data_set_value(_npc.id, "throttle", 0) == 1.0 and get_data_set_value(_half.id, "throttle", 0) == 0.5)
+    visual_expect("motion: all three are under way", to_object(_npc.id) is not None and to_object(_play.id) is not None)
+    ->END

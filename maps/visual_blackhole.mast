@@ -1,0 +1,49 @@
+# SPECIMEN: black hole (maelstrom).
+#
+# The engine ships no black-hole shader: its 18 renderer classes have no maelstrom, and the
+# only "maelstrom" string in the binary sits in the 2D radar's icon table next to
+# icon-blackhole. So the mock's black hole is NOT a port - the event horizon is a plain dark
+# sphere, and the disc borrows shader-point-ring's radial band (bright at the mid-radius,
+# fading to nothing at both edges) mapped onto the two radii a maelstrom actually has.
+#
+# Which makes the ENGINE run of this specimen the interesting one: if a black hole draws
+# nothing there, that is a finding, not a bug in the mock - and this card is where it gets
+# settled instead of argued.
+
+@map/visual_blackhole "Visual: black hole"
+" Two maelstroms: stock, and a wide tinted one. Also the open question of what the engine draws.
+    visual_set_index_by_name("blackhole")
+    await task_schedule(run_visual_blackhole)
+    ->END
+
+
+=== run_visual_blackhole
+metadata: ``` yaml
+type: visual/blackhole
+```
+    # A - stock. terrain_spawn_black_hole's defaults: event horizon 100, gravity radius 1500.
+    _a = terrain_spawn_black_hole(0, 0, 0)
+    # B - wide and tinted, so the disc's outer edge is visibly the GRAVITY radius and the
+    # color visibly comes from the mission's radar_color_override.
+    _b = terrain_spawn_black_hole(9000, 0, 0, gravity_radius=4000)
+    set_data_set_value(to_id(_b), "radar_color_override", "#6cf", 0)
+
+    # Something with a known size, right at the edge of A's well, so the scale is readable.
+    _ref = npc_spawn(1500, 0, 0, "Ruler", "tsn", "tsn_light_cruiser", "behav_npcship")
+
+    _anchor = visual_anchor(4500, 0, 0)
+    visual_camera(_anchor, eye=(0, 6000, 0 - 9000))
+
+    _expect = ~~[
+        "TWO dark discs, each ringed by a glow lying flat in the plane",
+        "each ring is BRIGHTEST midway out, fading to nothing at the hole and at its outer edge",
+        "the right ring is much wider than the left (gravity radius 4000 vs 1500)",
+        "the right ring is blue, the left is amber (radar_color_override vs the default)",
+        "the cruiser sits at the left ring's bright middle and is small against it",
+    ]~~
+    visual_case("Black hole", _expect, subtitle="maelstrom - no engine shader exists to match", notes="IN THE ENGINE: if nothing draws here, record that - the mock is showing more than the engine does", data="A horizon 100 gravity 1500 | B horizon 100 gravity 4000 tint 6cf")
+
+    visual_expect("blackhole: stock hole spawned", to_object(_a) is not None)
+    visual_expect("blackhole: wide hole spawned", to_object(_b) is not None)
+    visual_expect("blackhole: gravity radius is readable", get_data_set_value(to_id(_b), "gravity_radius", 0) == 4000)
+    ->END

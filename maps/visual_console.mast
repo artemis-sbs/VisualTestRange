@@ -1,0 +1,76 @@
+# The two screens: the server STAGE (view + card + controls) and a client VIEWPORT
+# (view + card). Both draw the same card over a full-bleed 3dview, so the server tab
+# alone is enough to walk the whole range, and extra browser tabs / consoles are only
+# needed for the specimens that are about per-client differences.
+#
+# Repaint is by re-entering the label, never by updating a child in place: an in-place
+# child update inside an absolutely-positioned region ghosts in the ENGINE (and the mock
+# cannot reproduce it), which is exactly the class of bug this range exists to catch. It
+# must not be the range's own bug.
+
+=== visual_stage
+    gui_layout_widget("3dview")
+    visual_camera_apply(client_id)
+
+    # The card, bottom left, over the view.
+    gui_section("area: 1, 52, 46, 99;")
+    for _line in visual_card_lines():
+        gui_row("row-height: content; padding: 2px, 4px, 2px, 6px;")
+        gui_text(_line)
+
+    # Controls, bottom right. Named widgets, not inline calls: an inline
+    # `on gui_message(gui_button("x")):` is accepted by the mock and rejected by the
+    # engine's stricter parser.
+    gui_section("area: 62, 88, 99, 99;")
+    gui_row("row-height: 1fr;")
+    _btn_prev = gui_button("< Prev")
+    _btn_again = gui_button("Re-run")
+    _btn_next = gui_button("Next >")
+    gui_row("row-height: content;")
+    gui_text(visual_text(visual_stage_position(), "gui-1", "#8fa4bd"))
+
+    on gui_message(_btn_prev):
+        visual_step(-1)
+        task_schedule(visual_run_index)
+    on gui_message(_btn_again):
+        task_schedule(visual_run_index)
+    on gui_message(_btn_next):
+        visual_step(1)
+        task_schedule(visual_run_index)
+
+    # A specimen finishing bumps the card sequence; repaint so its card is the one on screen.
+    on change visual_card_seq():
+        jump visual_stage
+    on change visual_camera_seq():
+        jump visual_stage
+
+    await gui()
+
+
+=== visual_viewport
+    gui_layout_widget("3dview")
+    visual_camera_apply(client_id)
+
+    # A specimen about PER-CLIENT differences (what this console can see vs another) has to
+    # put this console on a ship - the FX stream is culled around the assigned ship, not the
+    # camera. A specimen that cares tags one ship "visual_client_ship"; the rest never do,
+    # and this is a no-op for them.
+    _mine = to_object_list(role("visual_client_ship"))
+    if len(_mine) > 0:
+        sbs.assign_client_to_ship(client_id, _mine[0].id)
+
+    gui_section("area: 1, 52, 46, 99;")
+    for _line in visual_card_lines():
+        gui_row("row-height: content; padding: 2px, 4px, 2px, 6px;")
+        gui_text(_line)
+
+    gui_section("area: 62, 94, 99, 99;")
+    gui_row("row-height: 1fr;")
+    gui_text(visual_text("viewport - drive the range from the server tab", "gui-1", "#6f8296"))
+
+    on change visual_card_seq():
+        jump visual_viewport
+    on change visual_camera_seq():
+        jump visual_viewport
+
+    await gui()

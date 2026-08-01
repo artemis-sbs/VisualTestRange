@@ -1,0 +1,55 @@
+# SPECIMEN: shield rings.
+#
+# The ring around a ship is split fore and aft and colored by each half's remaining
+# fraction, with a deliberate gap so the split is visible even at equal charge. Pinned
+# fractions here, so "green above two thirds, yellow above a third, red below" is a thing
+# you check rather than remember - and so a fore/aft swap is caught.
+
+@map/visual_shield_rings "Visual: shield rings"
+" Four ships at pinned shield fractions, plus one deliberately lopsided.
+    visual_set_index_by_name("shield_rings")
+    await task_schedule(run_visual_shield_rings)
+    ->END
+
+
+=== run_visual_shield_rings
+metadata: ``` yaml
+type: visual/shield_rings
+```
+    _gap = 1100
+    _fracs = ~~[1.0, 0.5, 0.15, 0.0]~~
+    _x0 = 0 - (len(_fracs) + 0) * _gap / 2
+
+    # NOTE get_data_set_value(id, key, INDEX) - the third argument is the slot, not a default.
+    # It returns None for an unset key, so the fallback has to be explicit.
+    for _fi in range(len(_fracs)):
+        _s = to_object(npc_spawn(_x0 + _fi * _gap, 0, 0, f"shield {_fracs[_fi]}", "tsn", "tsn_light_cruiser", "behav_npcship"))
+        if _s is not None:
+            _max = get_data_set_value(_s.id, "shield_max", 0)
+            if _max is None:
+                _max = 100
+            _s.data_set.set("shield_val", _max * _fracs[_fi], 0)
+            _s.data_set.set("shield_val", _max * _fracs[_fi], 1)
+
+    # The lopsided one: front full, back flat. Its two half-rings must NOT match.
+    _split = to_object(npc_spawn(_x0 + len(_fracs) * _gap, 0, 0, "front full aft flat", "tsn", "tsn_light_cruiser", "behav_npcship"))
+    if _split is not None:
+        _m = get_data_set_value(_split.id, "shield_max", 0)
+        if _m is None:
+            _m = 100
+        _split.data_set.set("shield_val", _m, 0)
+        _split.data_set.set("shield_val", 0, 1)
+
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, eye=(0, 1500, 0 - 2600))
+
+    _expect = ~~[
+        "five ships, each ringed by a split fore/aft arc with a gap at each side",
+        "left to right the rings go green, yellow, red, then dark at zero",
+        "the last ship's two halves DIFFER - one bright, one dark",
+        "on the last ship the bright half is at the NOSE",
+    ]~~
+    visual_case("Shield rings", _expect, notes="green above two thirds, yellow above a third, red below", data="fractions 1.0 / 0.5 / 0.15 / 0.0, then front 1.0 with aft 0.0")
+
+    visual_expect("shields: lopsided ship really is lopsided", get_data_set_value(_split.id, "shield_val", 0) > get_data_set_value(_split.id, "shield_val", 1))
+    ->END

@@ -1,0 +1,60 @@
+# SPECIMEN: torpedoes in flight.
+#
+# Projectiles are streamed on their own channel, not as space objects, and they are the
+# easiest thing in the view to lose: they went missing once already ("draw torpedoes again")
+# and nothing failed - the fight just looked oddly quiet. A torpedo also has no Y in the
+# radar stream, so a bug here reads as "everything is drawn on the floor".
+#
+# One ship firing at a fixed target, broadside to the camera, on a loop. The whole flight is
+# in frame, so a projectile that never appears, appears late, or slides along y=0 while its
+# firer sits above the plane is obvious.
+
+@map/visual_torpedo "Visual: torpedoes"
+" One ship firing across the frame on a loop, seen broadside.
+    visual_set_index_by_name("torpedo")
+    await task_schedule(run_visual_torpedo)
+    ->END
+
+
+=== run_visual_torpedo
+metadata: ``` yaml
+type: visual/torpedo
+```
+    # Firer and target BOTH lifted off the plane: a projectile drawn at y=0 then reads as
+    # obviously wrong instead of plausibly right.
+    _shooter = to_object(npc_spawn(0 - 2500, 600, 0, "Archer", "tsn", "tsn_battle_cruiser", "behav_npcship"))
+    _target = to_object(npc_spawn(2500, 600, 0, "Quarry", "raider", "kralien_battleship", "behav_npcship"))
+    ->END if _shooter is None or _target is None
+
+    shared VISUAL_TORP_SHOOTER = _shooter.id
+    shared VISUAL_TORP_TARGET = _target.id
+    torpedo_make_available(_shooter.id, "Homing", 99)
+    # Aim, but hold station: throttle 0 keeps the pair where the camera is pointed.
+    target(_shooter.id, _target.id, True, 0.0)
+    target(_target.id, _shooter.id, False, 0.0)
+
+    _anchor = visual_anchor(0, 600, 0)
+    visual_camera(_anchor, eye=(0, 700, 0 - 5200))
+    task_schedule(visual_torpedo_fire_loop)
+
+    _expect = ~~[
+        "a torpedo crossing the gap left to right, over and over",
+        "it appears AT the firer, not partway across",
+        "it flies at the ships' altitude - NOT sliding along the floor below them",
+        "it is visible for the whole crossing, not just near the target",
+    ]~~
+    visual_case("Torpedoes", _expect, notes="both ships are held 600u ABOVE the plane, so a y=0 projectile is unmistakable", data="Homing, one every 3s, 5000u apart")
+
+    visual_expect("torpedo: firer has torpedoes loaded", torpedo_get_count_for_ship(_shooter.id, "Homing")[0] > 0)
+    visual_expect("torpedo: firer is aimed", get_data_set_value(_shooter.id, "target_id", 0) == _target.id)
+    ->END
+
+
+=== visual_torpedo_fire_loop
+    # Runs until the scene is torn down under it - every specimen switch deletes these ships.
+---loop
+    await delay_sim(3)
+    ->END if not object_exists(VISUAL_TORP_SHOOTER)
+    ->END if not object_exists(VISUAL_TORP_TARGET)
+    fire_torpedo(VISUAL_TORP_SHOOTER, "Homing")
+    jump loop

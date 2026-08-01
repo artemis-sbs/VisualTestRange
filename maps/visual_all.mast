@@ -1,0 +1,45 @@
+# Staging: how a specimen gets on screen, and the two entry points that walk the range.
+#
+# visual_run_index is what the stage's Prev / Re-run / Next buttons schedule. Everything
+# else here is convenience around it.
+
+=== visual_run_index
+    # Tear the previous scene down in two beats. Deletion is deferred, and blanking the sim
+    # restarts the object-id counter - fuse them and the next scene is handed ids that are
+    # still queued for freeing, so most of it never survives being spawned. Each step gets
+    # its own tick: one for the frees to land, one because sim_create() leaves the sim handle
+    # stale for the rest of the frame.
+    visual_reset_objects()
+    await delay_sim(1)
+    visual_reset_sim()
+    await delay_sim(1)
+    _lbl = visual_label_at()
+    if _lbl is None:
+        visual_case("No specimens", ["Nothing is tagged type: visual/*"], notes="check the story.mast imports")
+        ->END
+    await task_schedule(_lbl)
+    ->END
+
+
+@map/visual_range "Visual Range"
+" Walk the specimens: the server tab shows the view, the card and Prev/Re-run/Next.
+    visual_set_index(0)
+    await task_schedule(visual_run_index)
+    ->END
+
+
+@map/visual_all "Visual Range - run every specimen"
+" Build every specimen in turn, holding each one on screen. For a headless sweep of the
+" machine-checkable half: --map visual_all --test 90
+    visual_results_clear()
+    _n = len(visual_specimens())
+    log(f"visual: roster {visual_specimen_names()}", "visual")
+    print(f"VISUAL ROSTER {_n}: {visual_specimen_names()}")
+    for _slide in range(_n):
+        visual_set_index(_slide)
+        await task_schedule(visual_run_index)
+        # Hold long enough to actually look at it when a browser is attached; harmless
+        # headless, where the point is the VISUAL PASS/FAIL lines each specimen prints.
+        await delay_sim(VISUAL_HOLD_SECONDS)
+    visual_report()
+    ->END

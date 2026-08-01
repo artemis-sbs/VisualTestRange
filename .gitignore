@@ -1,0 +1,6 @@
+mast.compile.log
+mast.runtime.log
+mast.runtime.run*.log
+__pycache__/
+*.pyc
+debug.log

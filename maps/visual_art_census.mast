@@ -1,0 +1,55 @@
+# SPECIMEN: art census - one object per shipData key, in a grid.
+#
+# The cheapest insurance in the range. An art root that fails to load is silently ABSENT
+# from the 3D view; there is no error, no gap in the log, nothing except the object not
+# being there. That is how "planet" and "maelstrom" went missing for as long as they did,
+# and how a mistaken report of "wrecks not showing up" cost a session.
+#
+# Here the whole shipData catalog stands in one grid. A hole in the grid, or a placeholder
+# sphere among the hulls, is the failure - visible in one glance, no hunting.
+
+@map/visual_art_census "Visual: art census"
+" Every shipData art in one grid. Holes and placeholder spheres are the failures.
+    visual_set_index_by_name("art_census")
+    await task_schedule(run_visual_art_census)
+    ->END
+
+
+=== run_visual_art_census
+metadata: ``` yaml
+type: visual/art_census
+```
+    _keys = visual_ship_keys()
+    _cols = 12
+    _gap = 900
+    _rows = int((len(_keys) + _cols - 1) / _cols)
+    # Center the grid on the origin so the framing does not depend on how many keys there are.
+    _x0 = -(_cols - 1) * _gap / 2
+    _z0 = -(_rows - 1) * _gap / 2
+    _made = 0
+    # NOTE the loop variable. MAST loop state collides by NAME across a schedule chain: this
+    # loop first ran ten times instead of 184 because the sweep that scheduled it was itself
+    # inside a `for _i`, and this loop resumed THAT iterator. Every loop in this range gets
+    # its own name.
+    for _ci in range(len(_keys)):
+        _key = _keys[_ci]
+        _col = _ci % _cols
+        _row = int(_ci / _cols)
+        _o = terrain_spawn(_x0 + _col * _gap, 0, _z0 + _row * _gap, _key, "#,census", _key, "behav_asteroid")
+        if _o is not None:
+            _made += 1
+
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, eye=(0, _rows * _gap * 0.8, 0 - _rows * _gap * 0.9))
+
+    _expect = ~~[
+        "a grid of DIFFERENT hulls, stations, rocks and props",
+        "no gaps: every grid position is occupied",
+        "no plain gray spheres (a sphere is the placeholder for art that failed to load)",
+        "the HUD 'failed art' line reads (none)",
+    ]~~
+    visual_case("Art census", _expect, notes="alphabetical by shipData key, 12 per row, 900u apart", data=f"{_made} of {len(_keys)} keys spawned, {_rows} rows")
+
+    visual_expect("census: every shipData key spawned", _made == len(_keys), f"{_made}/{len(_keys)}")
+    visual_expect("census: catalog is not empty", len(_keys) > 0)
+    ->END

@@ -1,0 +1,9 @@
+# Visual Test Range - every specimen builds its own scene, so nothing ambient may
+# spawn, drift or shoot on its own. A specimen that wants a player ship spawns one.
+AUTO_START: false
+DIFFICULTY: 5
+PLAYER_COUNT: 1
+PLAYER_CREATE_DEFAULT: false
+
+AUTO_PLAY:
+    enable: false
