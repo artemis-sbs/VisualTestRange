@@ -1,0 +1,71 @@
+# SPIKE Q2 + Q4: does changing the camera CUT or blend, and what happens when the live
+# camera's dolly object is deleted underneath it?
+#
+# Q2 decides the whole rundown feel. A director punches between shots; if the engine slides
+# between them instead of cutting, a punch reads as a swoop and the broadcast idiom breaks -
+# and the plan's "a cut is free, anything fancier must be faked" assumption is wrong.
+#
+# Q4 is the safety question. Cutscenes tear their scenes down; if a dangling dolly id freezes
+# the view or drops it to the origin, every shot must release the camera BEFORE cleanup, and
+# that ordering has to be baked into the API rather than left to whoever writes the cutscene.
+
+@map/visual_camera_cut "Visual: camera cut (spike Q2/Q4)"
+" Alternating cameras every 3s, then the live camera post is deleted out from under it.
+    visual_set_index_by_name("camera_cut")
+    await task_schedule(run_visual_camera_cut)
+    ->END
+
+
+=== run_visual_camera_cut
+metadata: ``` yaml
+type: visual/camera_cut
+```
+    # One subject, framed from two very different angles so a slide between them would be
+    # unmistakable - a near-identical pair could hide a fast blend.
+    _subject = to_object(npc_spawn(0, 0, 0, "Subject", "tsn", "starbase_command", "behav_station"))
+    ->END if _subject is None
+    for _ci in range(7):
+        terrain_spawn(0 - 4500 + _ci * 1500, 0, 3000, f"ref{_ci}", "#,ref", "plain_asteroid_8", "behav_asteroid")
+
+    shared VISUAL_CUT_A = visual_anchor(0, 400, 0 - 2200, "camA")
+    shared VISUAL_CUT_B = visual_anchor(2600, 1500, 1800, "camB")
+    shared VISUAL_CUT_SUBJECT = _subject.id
+    shared VISUAL_CUT_N = 0
+
+    visual_camera(VISUAL_CUT_A, eye=(0, 0, 0), target_id=_subject.id)
+    task_schedule(visual_camera_cut_driver)
+
+    _expect = ~~[
+        "the view alternates between a low front angle and a high three-quarter angle",
+        "CUT: the change is instantaneous, one frame to the next",
+        "BLEND: the view travels between the two positions - record this, it changes the plan",
+        "after about 12 seconds the LIVE camera post is deleted",
+        "note what the view does then: hold, jump to the origin, or something else",
+    ]~~
+    visual_case("Camera cut", _expect, subtitle="SPIKE Q2 (cut vs blend) and Q4 (dangling dolly)", notes="watch the first few switches for Q2, then keep watching past 12s for Q4", data="two posts, switching every 3s; live post deleted on the 4th switch")
+
+    visual_expect("spike Q2: two camera posts exist", VISUAL_CUT_A and VISUAL_CUT_B)
+    ->END
+
+
+=== visual_camera_cut_driver
+    _gen = visual_generation()   # ids are recycled across resets; the generation is not
+---cut_loop
+    await delay_sim(3)
+    ->END if visual_generation() != _gen
+    ->END if not object_exists(VISUAL_CUT_SUBJECT)
+    VISUAL_CUT_N += 1
+
+    # The 4th switch is the Q4 half: pin to a post and then delete THAT post.
+    if VISUAL_CUT_N == 4:
+        visual_camera(VISUAL_CUT_B, eye=(0, 0, 0), target_id=VISUAL_CUT_SUBJECT)
+        await delay_sim(2)
+        delete_object(VISUAL_CUT_B)
+        visual_case_note("live camera post DELETED - what does the view do now?")
+        ->END
+
+    if VISUAL_CUT_N % 2 == 1:
+        visual_camera(VISUAL_CUT_B, eye=(0, 0, 0), target_id=VISUAL_CUT_SUBJECT)
+    else:
+        visual_camera(VISUAL_CUT_A, eye=(0, 0, 0), target_id=VISUAL_CUT_SUBJECT)
+    jump cut_loop

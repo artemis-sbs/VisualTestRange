@@ -1,0 +1,61 @@
+# SPIKE Q1: are cinematic_control's offsets WORLD-space or DOLLY-LOCAL?
+#
+# The single most consequential unknown in CINEMATIC_PLAN.md. The engine's whole camera API
+# is one call - camera at dollyID + dollyPos, looking at targetID + targetPos - and whether
+# that offset is rotated into the dolly's frame decides what is buildable:
+#
+#   LOCAL  -> "over the left shoulder" is one call; chase and orbit shots are free.
+#   WORLD  -> the offset is a fixed point in space; every chase or orbit must recompute an
+#             anchor position every tick, and the mover in Phase 2 gets much heavier.
+#
+# The mock is known to be WORLD (it adds the offset raw), so it is the control case here.
+# The ENGINE run is the experiment.
+#
+# THE DISCRIMINATOR: a ship yaws in place while the camera is pinned to it with a sideways
+# offset. Watch the SHIP against the fixed rocks behind it:
+#
+#   the ship holds still and the rocks sweep past  -> LOCAL  (camera orbited with the ship)
+#   the ship turns in front of you, rocks fixed    -> WORLD  (camera stayed put)
+
+@map/visual_camera_offsets "Visual: camera offsets (spike Q1)"
+" World-space or dolly-local? Watch the spinning ship against the fixed rocks.
+    visual_set_index_by_name("camera_offsets")
+    await task_schedule(run_visual_camera_offsets)
+    ->END
+
+
+=== run_visual_camera_offsets
+metadata: ``` yaml
+type: visual/camera_offsets
+```
+    # The subject: a ship that yaws in place and never translates.
+    _ship = to_object(npc_spawn(0, 0, 0, "Spinner", "tsn", "tsn_battle_cruiser", "behav_npcship"))
+    ->END if _ship is None
+    visual_spin(_ship.id, seconds_per_turn=14)
+
+    # Fixed background. Without a stationary reference you cannot tell which of the two
+    # moved - the whole experiment rests on having something that certainly did not.
+    for _oi in range(9):
+        terrain_spawn(0 - 6000 + _oi * 1500, 0, 5200, f"ref{_oi}", "#,ref", "plain_asteroid_6", "behav_asteroid")
+
+    # Pinned ABEAM (+X) and slightly above. A sideways offset is what separates the two
+    # cases; a straight-behind offset looks similar either way for the first few seconds.
+    visual_camera(_ship.id, eye=(1500, 350, 0))
+
+    _expect = ~~[
+        "a ship yawing steadily in place, rocks in a line behind it",
+        "LOCAL: the ship holds its pose on screen while the rocks sweep past it",
+        "WORLD: the ship turns in front of you and the rocks stay put",
+        "either reading is a valid result - record which one, per renderer",
+    ]~~
+    visual_case("Camera offsets", _expect, subtitle="SPIKE Q1 - answer it in the ENGINE", notes="the mock is known WORLD-space (it adds the offset raw), so it is the control case", data="camera pinned to the ship at eye=(1500,350,0), one turn per 14s")
+
+    # The visual claim is "the ship yaws"; the checkable one is "the driver is alive". A dead
+    # driver leaves a stationary ship, which looks exactly like a WORLD-space answer - the
+    # experiment would return a confident wrong reading with nothing failing.
+    _tx0 = get_data_set_value(_ship.id, "target_pos_x", 0)
+    await delay_sim(4)
+    _tx1 = get_data_set_value(_ship.id, "target_pos_x", 0)
+    visual_expect("spike Q1: subject spawned", _ship is not None)
+    visual_expect("spike Q1: the spin driver is running", _tx0 != _tx1, f"{_tx0} -> {_tx1}")
+    ->END

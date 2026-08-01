@@ -48,6 +48,15 @@ def visual_case(title, expect, notes="", data="", subtitle=""):
     log(line, "visual")
 
 
+def visual_case_note(note):
+    """Replace the card's NOTE line mid-specimen and repaint - for a spike that reaches a
+    moment worth calling out ("the live camera post was just deleted")."""
+    _CARD["notes"] = str(note)
+    _CARD["seq"] += 1
+    print(f"VISUAL NOTE {note}")
+    log(f"VISUAL NOTE {note}", "visual")
+
+
 def visual_card():
     """The current card as a plain dict (title, subtitle, expect, notes, data, seq)."""
     return dict(_CARD)
@@ -119,6 +128,20 @@ def visual_camera(dolly_id, eye=(0.0, 900.0, -2600.0), target_id=None, look=(0.0
     Both offsets are world-space, so the frame is reproducible run to run - which is the
     whole point: two runs of a specimen must be comparable, and engine vs mock must be
     comparable. `target_id` defaults to the dolly, i.e. look at what you are pinned to.
+
+    A single-object shot pins BOTH ids to that object (`target_id` defaults to the dolly), and
+    the offsets are then measured relative to it.
+
+    THREE PLACEMENT RULES, all learned the hard way:
+
+    * **Never pin a SHIP at zero offset.** The camera lands inside the hull mesh and you see
+      the inside of the model. Only `visual_anchor` (invisible, no mesh) is safe at (0,0,0),
+      which is why every specimen frames through an anchor rather than through its subject.
+    * **Keep the rig off the sightline.** An offset that puts the dolly object between the
+      camera and what it is looking at means you filmed the back of the dolly. Offset toward
+      the subject and above, so the hull sits behind the lens.
+    * **The dolly must be an assignable object.** See `visual_camera_apply` - the engine wants
+      the client assigned to whatever the camera rides, so the dolly cannot be terrain.
     """
     from sbs_utils.procedural.query import to_id
     _CAM["dolly"] = to_id(dolly_id) or 0
@@ -134,7 +157,19 @@ def visual_camera_seq():
 
 
 def visual_camera_apply(client_id):
-    """Point one client's cinematic camera at the current pin. Called by the console."""
+    """Point one client's cinematic camera at the current pin. Called by the console.
+
+    ASSIGNMENT AND DOLLY ARE DIFFERENT THINGS. The engine needs the client assigned to a space
+    object for the console to work at all, but that object is the console's IDENTITY, not the
+    lens position - LM's Game Master assigns its client once to an invisible cambot and then
+    points the cinematic camera at whatever is selected
+    ([gamemaster.mast:623](../../LegendaryMissions/gamemaster/gamemaster.mast#L623)).
+
+    So the console keeps one cambot for its whole life (`visual_client_cambot`) and this only
+    moves the lens. Re-assigning per shot would change the console's identity mid-specimen -
+    and would quietly break `fx_client_scope`, whose entire subject is what a client's
+    assigned ship can see.
+    """
     if not _CAM["dolly"]:
         return False
     from sbs_utils.procedural.gui.cinematic import gui_cinematic_full_control
@@ -144,16 +179,50 @@ def visual_camera_apply(client_id):
     return True
 
 
+def visual_client_cambot(client_id):
+    """Give this console its own invisible cambot and assign the client to it, once.
+
+    The engine requires the assignment; the mock does not, which is exactly why forgetting it
+    would survive every headless run and only surface in an engine session.
+    """
+    from sbs_utils.procedural.query import to_object
+    from sbs_utils.procedural.inventory import get_inventory_value, set_inventory_value
+    existing = get_inventory_value(client_id, "visual_cambot", None)
+    if existing is not None and to_object(existing) is not None:
+        return existing
+    cam = visual_anchor(0, 0, 0, "")
+    if not cam:
+        return None
+    set_inventory_value(client_id, "visual_cambot", cam)
+    try:
+        FrameContext.context.sbs.assign_client_to_ship(client_id, cam)
+    except Exception:
+        pass
+    return cam
+
+
 def visual_anchor(x, y, z, name=None):
     """An invisible object to hang the camera on, so a specimen can frame empty space.
 
-    'invisible' art is the detached-camera pattern the admiral/GM consoles already use:
-    the engine never draws it and the mock drops it from the radar stream, so it adds
-    nothing to the picture it is there to frame.
+    Spawned the way LM's Game Master spawns its cambot - `player_spawn` with the 'invisible'
+    art, then `__player__` removed ([gamemaster.mast:64](../../LegendaryMissions/gamemaster/gamemaster.mast#L64)).
+    It has to be a PLAYER-family object, not terrain: the engine requires the client to be
+    ASSIGNED to the object the camera rides, and a terrain object is not assignable. An
+    earlier version of this used terrain_spawn, which works fine in the mock and would have
+    silently failed in the engine - for a reason having nothing to do with what the camera
+    spikes are trying to measure.
+
+    Invisible on both sides: the engine never draws it, and the mock drops it from the radar
+    stream, so it adds nothing to the picture it exists to frame.
     """
-    from sbs_utils.procedural.spawn import terrain_spawn
-    from sbs_utils.procedural.query import to_id
-    return to_id(terrain_spawn(x, y, z, name, "#,visual_anchor", "invisible", "behav_selection"))
+    from sbs_utils.procedural.spawn import player_spawn
+    from sbs_utils.procedural.query import to_object, to_id
+    from sbs_utils.procedural.roles import remove_role
+    cam = to_object(player_spawn(x, y, z, name or "", "#,visual_anchor", "invisible"))
+    if cam is None:
+        return 0
+    remove_role(cam, "__player__")   # rides the camera, but is not a player ship
+    return to_id(cam)
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +380,115 @@ def visual_stage_position():
     return f"{i + 1} of {len(names)}   {names[i]}"
 
 
+# ---------------------------------------------------------------------------
+# Drivers: things that move on their own for the duration of one specimen.
+#
+# Every driver MUST be registered here, because the scene is torn down under it when the
+# stage moves on - a survivor would keep writing to deleted objects in the next specimen.
+# ---------------------------------------------------------------------------
+_DRIVERS = []
+
+# Bumped by every teardown. A long-running MAST task cannot prove it still belongs to the
+# scene it was started in by checking an object id: ids are RECYCLED after a sim reset, so a
+# stale id happily matches some unrelated object in a later specimen and the task carries on
+# spawning ships and re-pointing the camera in someone else's scene. Observed exactly that -
+# camera_rate's second pass fired after the whole sweep had finished. Capture the generation
+# at start, compare it in the loop.
+_GEN = {"n": 0}
+
+
+def visual_generation():
+    """Scene generation. Changes on every teardown; a driver whose generation is stale must end."""
+    return _GEN["n"]
+
+
+def visual_driver(cb, seconds=0.2, count=None):
+    """Run `cb(task)` on a repeating tick for as long as this specimen is on stage."""
+    from sbs_utils.tickdispatcher import TickDispatcher
+    return _register_driver(TickDispatcher.do_interval(cb, seconds, count))
+
+
+def _register_driver(task):
+    _DRIVERS.append(task)
+    return task
+
+
+def visual_drivers_stop():
+    """Stop every driver this specimen started. Called by the teardown, first."""
+    for t in _DRIVERS:
+        try:
+            t.stop()
+        except Exception:
+            pass
+    _DRIVERS.clear()
+
+
+def visual_spin(obj_id, seconds_per_turn=12.0, radius=8000.0):
+    """Yaw an object in place, forever, without moving it.
+
+    Steers by DESTINATION rather than by writing a heading: `target_pos_*` is the documented
+    navigation lever and both renderers honor it, where a directly-written orientation is not
+    reliably settable from script. Throttle stays 0, so the ship turns without translating.
+    """
+    import math
+    from sbs_utils.procedural.query import to_object
+    from sbs_utils.tickdispatcher import TickDispatcher
+    o = to_object(obj_id)
+    if o is None:
+        return None
+    o.data_set.set("throttle", 0.0, 0)
+    base = (o.pos.x, o.pos.y, o.pos.z)
+    state = {"t": 0.0}
+
+    def _step(task):
+        state["t"] += 0.2
+        a = (state["t"] / max(seconds_per_turn, 0.1)) * 2.0 * math.pi
+        oo = to_object(obj_id)
+        if oo is None:
+            task.stop()
+            return
+        oo.data_set.set("target_pos_x", base[0] + math.sin(a) * radius, 0)
+        oo.data_set.set("target_pos_y", base[1], 0)
+        oo.data_set.set("target_pos_z", base[2] + math.cos(a) * radius, 0)
+
+    return _register_driver(TickDispatcher.do_interval(_step, 0.2))
+
+
+def visual_drive_anchor(anchor_id, to_xyz, seconds):
+    """Walk an anchor from where it is to `to_xyz` by WRITING ITS POSITION each tick.
+
+    This is the driver whose smoothness is in question (Q3): MAST/tick writes land at a few
+    Hz while the view runs at 60, so the engine may show this as a series of jumps. The
+    alternative - letting a real object move under its own physics - is what it is measured
+    against.
+    """
+    from sbs_utils.procedural.query import to_object
+    from sbs_utils.tickdispatcher import TickDispatcher
+    from sbs_utils.vec import Vec3
+    o = to_object(anchor_id)
+    if o is None:
+        return None
+    start = (o.pos.x, o.pos.y, o.pos.z)
+    state = {"t": 0.0}
+    step = 0.2
+
+    def _step(task):
+        state["t"] += step
+        f = state["t"] / max(seconds, 0.001)
+        if f >= 1.0:
+            f = 1.0
+            task.stop()
+        oo = to_object(anchor_id)
+        if oo is None:
+            task.stop()
+            return
+        oo.pos = Vec3(start[0] + (to_xyz[0] - start[0]) * f,
+                      start[1] + (to_xyz[1] - start[1]) * f,
+                      start[2] + (to_xyz[2] - start[2]) * f)
+
+    return _register_driver(TickDispatcher.do_interval(_step, step))
+
+
 def visual_reset_objects():
     """Delete every space object from the previous specimen. Sides survive - they are the
     diplomacy baseline registered once at start, not actors.
@@ -325,6 +503,8 @@ def visual_reset_objects():
     from sbs_utils.procedural.query import is_space_object_id, is_client_id
     from sbs_utils.procedural.space_objects import delete_object
     from sbs_utils.agent import Agent
+    visual_drivers_stop()   # FIRST: a surviving driver would write to the objects being deleted
+    _GEN["n"] += 1          # ...and any MAST task still awaiting must see that it is stale
     for _id in list(Agent.all.keys()):
         if not is_space_object_id(_id) or is_client_id(_id):
             continue

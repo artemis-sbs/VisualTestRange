@@ -49,6 +49,23 @@ the runner, and the card repaints with each one.
 | `visual_motion` | three ships crossing at documented speeds | stutter, teleporting, or speeds that do not scale |
 | `visual_shield_rings` | pinned shield fractions, plus a lopsided ship | wrong color bands; fore/aft halves swapped |
 
+### Camera spikes (CINEMATIC_PLAN.md Phase 0)
+
+These three are **experiments, not regression tests** — they exist to be run in the *engine*
+and have their answers written down. Each is unambiguous by construction: there is no reading
+of the picture that leaves the question open.
+
+| Map | Question | How to read it |
+|---|---|---|
+| `visual_camera_offsets` | **Q1** — are the offsets world-space or dolly-local? | a ship yaws in place with the camera pinned abeam. Ship holds its pose while the rocks sweep → **local**. Ship turns in front of fixed rocks → **world** |
+| `visual_camera_cut` | **Q2** cut vs blend, **Q4** dangling dolly | alternates two very different angles every 3s; then deletes the live camera post at ~12s and the card says so |
+| `visual_camera_rate` | **Q3** — what can drive a move | the same 9000u move twice: written per tick, then carried by a ship under throttle. If pass 1 stutters and pass 2 does not, the mover must ride an object |
+
+Q1 is the one that matters most: **local** makes chase and orbit shots one call each; **world**
+means every such shot recomputes an anchor every tick, and Phase 2's mover gets much heavier.
+The mock is known to be world-space (it adds the offset raw), so it is the control case — the
+engine run is the experiment.
+
 ## Writing a specimen
 
 A specimen is a label tagged `metadata: type: visual/<name>`, with a thin `@map/visual_<name>`

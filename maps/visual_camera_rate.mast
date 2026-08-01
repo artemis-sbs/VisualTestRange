@@ -1,0 +1,82 @@
+# SPIKE Q3: how smoothly can a SCRIPT-DRIVEN camera move?
+#
+# The engine has no camera interpolation, so every move in Phase 2 is us writing a position.
+# But script ticks land at a few Hz while the view runs at 60 - so a written path may arrive
+# as a series of jumps. If it does, the mover cannot be "write the position each tick"; it
+# has to be "attach the camera to something the PHYSICS moves", which is a different design.
+#
+# Two passes over the same move, announced on the card as they run:
+#
+#   PASS 1  an anchor whose position is written on a repeating tick     (the naive mover)
+#   PASS 2  the camera pinned to a real ship under its own throttle     (physics does the work)
+#
+# If pass 1 stutters and pass 2 is smooth, Phase 2's mover is object-attached, not written.
+
+@map/visual_camera_rate "Visual: camera rate (spike Q3)"
+" The same dolly move driven two ways - written per tick, then carried by a moving ship.
+    visual_set_index_by_name("camera_rate")
+    await task_schedule(run_visual_camera_rate)
+    ->END
+
+
+=== run_visual_camera_rate
+metadata: ``` yaml
+type: visual/camera_rate
+```
+    # A subject to keep in frame, and a row of rocks so lateral motion has texture to move
+    # against - a smooth move past a featureless void looks identical to no move at all.
+    _subject = to_object(npc_spawn(0, 0, 0, "Subject", "tsn", "starbase_command", "behav_station"))
+    ->END if _subject is None
+    for _ri in range(13):
+        terrain_spawn(0 - 9000 + _ri * 1500, 0, 2600, f"ref{_ri}", "#,ref", "plain_asteroid_7", "behav_asteroid")
+
+    shared VISUAL_RATE_SUBJECT = _subject.id
+    task_schedule(visual_camera_rate_driver)
+
+    _expect = ~~[
+        "PASS 1 (written per tick): the camera tracks left to right past the subject",
+        "watch for STUTTER - motion arriving in visible steps rather than continuously",
+        "PASS 2 (carried by a ship): the same move, driven by physics instead",
+        "if pass 2 is smooth and pass 1 is not, the mover must ride an object",
+        "the card says which pass is running",
+    ]~~
+    visual_case("Camera rate", _expect, subtitle="SPIKE Q3 - what can actually drive a move", notes="PASS 1 starting: position written on a repeating tick", data="same 9000u lateral move, ~8s each pass")
+
+    visual_expect("spike Q3: subject spawned", _subject is not None)
+    ->END
+
+
+=== visual_camera_rate_driver
+    # Stamp the scene we belong to. Object-id guards are NOT enough: ids are recycled after a
+    # reset, so `object_exists(old_id)` can be true again in a later specimen and this task
+    # would wake up and start spawning ships into someone else's scene. It did exactly that.
+    _gen = visual_generation()
+
+    # PASS 1 - the naive mover: an anchor whose position we write on a tick.
+    _a = visual_anchor(0 - 4500, 900, 0 - 3000, "rateA")
+    visual_camera(_a, eye=(0, 0, 0), target_id=VISUAL_RATE_SUBJECT)
+    _dest = ~~[4500, 900, -3000]~~
+    visual_drive_anchor(_a, _dest, 8)
+    await delay_sim(10)
+    ->END if visual_generation() != _gen
+    ->END if not object_exists(VISUAL_RATE_SUBJECT)
+
+    # PASS 2 - the same move, carried by a ship under its own throttle. The camera never
+    # moves itself; it is pinned to something the physics is already moving smoothly.
+    visual_case_note("PASS 2 running: camera carried by a ship under its own throttle")
+    _ship = to_object(npc_spawn(0 - 4500, 900, 0 - 3000, "Dolly", "tsn", "tsn_fighter", "behav_npcship"))
+    ->END if _ship is None
+    _ship.data_set.set("target_pos_x", 4500, 0)
+    _ship.data_set.set("target_pos_y", 900, 0)
+    _ship.data_set.set("target_pos_z", 0 - 3000, 0)
+    _ship.data_set.set("throttle", 0.35, 0)
+    # Where the rig sits matters twice over:
+    #   * NOT (0,0,0) - a camera on a ship's own position is INSIDE its mesh (only an
+    #     invisible anchor is safe at zero offset);
+    #   * and not BEHIND it either - the ship flies +X at z=-3000 while the subject sits at
+    #     the origin, so a -Z offset puts the hull squarely in the sightline.
+    # Put the rig on the subject SIDE of the ship and above it: the hull is then behind the
+    # lens, out of frame, and the camera still rides its motion exactly, which is the only
+    # thing this pass is measuring.
+    visual_camera(_ship.id, eye=(0, 250, 400), target_id=VISUAL_RATE_SUBJECT)
+    ->END

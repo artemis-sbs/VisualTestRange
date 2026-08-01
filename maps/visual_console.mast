@@ -10,6 +10,9 @@
 
 === visual_stage
     gui_layout_widget("3dview")
+    # The engine needs this console assigned to a space object before the cinematic camera
+    # means anything. Its own invisible cambot, once - the lens then moves independently.
+    visual_client_cambot(client_id)
     visual_camera_apply(client_id)
 
     # The card, bottom left, over the view.
@@ -49,6 +52,7 @@
 
 === visual_viewport
     gui_layout_widget("3dview")
+    visual_client_cambot(client_id)
     visual_camera_apply(client_id)
 
     # A specimen about PER-CLIENT differences (what this console can see vs another) has to

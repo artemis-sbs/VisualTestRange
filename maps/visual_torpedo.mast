@@ -52,8 +52,12 @@ type: visual/torpedo
 
 === visual_torpedo_fire_loop
     # Runs until the scene is torn down under it - every specimen switch deletes these ships.
+    # The generation, not the ids, is what proves that: ids are recycled after a reset, so an
+    # id guard alone can wake this loop up inside a later specimen.
+    _gen = visual_generation()
 ---loop
     await delay_sim(3)
+    ->END if visual_generation() != _gen
     ->END if not object_exists(VISUAL_TORP_SHOOTER)
     ->END if not object_exists(VISUAL_TORP_TARGET)
     fire_torpedo(VISUAL_TORP_SHOOTER, "Homing")
