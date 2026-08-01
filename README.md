@@ -54,6 +54,7 @@ rebuild.
 | `visual_nebula` | five color presets, then three densities | one cloud in five tints; density changing nothing |
 | `visual_motion` | three ships crossing at documented speeds | stutter, teleporting, or speeds that do not scale |
 | `visual_shield_rings` | pinned shield fractions, plus a lopsided ship | wrong color bands; fore/aft halves swapped |
+| `visual_button_chrome` | plain button vs `background_color` at five tones, over the live view | tells you whether a colorbutton is skinned or flat, and which fills the hover highlight still reads over |
 
 ### Camera spikes (CINEMATIC_PLAN.md Phase 0)
 
@@ -67,10 +68,26 @@ of the picture that leaves the question open.
 | `visual_camera_cut` | **Q2** cut vs blend, **Q4** dangling dolly | alternates two very different angles every 3s; then deletes the live camera post at ~12s and the card says so |
 | `visual_camera_rate` | **Q3** — what can drive a move | the same 9000u move twice: written per tick, then carried by a ship under throttle. If pass 1 stutters and pass 2 does not, the mover must ride an object |
 
-Q1 is the one that matters most: **local** makes chase and orbit shots one call each; **world**
-means every such shot recomputes an anchor every tick, and Phase 2's mover gets much heavier.
-The mock is known to be world-space (it adds the offset raw), so it is the control case — the
-engine run is the experiment.
+**Q1 and Q3 turned out to be answered already**, by shipped code rather than by these spikes:
+LM's Game Master orbits its 3D view by rotating the offset vector *itself*
+(`Vec3(0,0,dolly*10).rotate_around(...)`, `gamemaster.mast:623`) before handing it to
+`gui_cinematic_full_control`. If the engine rotated offsets into the dolly's frame that would
+be unnecessary — so offsets are **world-space** — and the GM re-applies the camera on every
+selection change, so **per-tick re-application is fine**. `visual_camera_offsets` and
+`visual_camera_rate` are now confirmations rather than open questions.
+
+`visual_camera_cut` still earns its keep: **Q2** (cut vs blend) and **Q4** (dangling dolly)
+have no shipped answer, and both are cheap to read.
+
+Two engine rules these spikes exist downstream of, both easy to get wrong:
+
+- The client must be **assigned to a space object** for the cinematic camera to mean anything —
+  but that object is the console's *identity*, not the lens. The GM assigns one invisible
+  cambot and then points the camera at whatever it likes; the range does the same via
+  `visual_client_cambot()`.
+- A camera pinned to a **ship** at zero offset sits **inside its mesh**. Only `visual_anchor`
+  (invisible, no mesh) is safe at `(0,0,0)`, and an anchor has to be a `player_spawn`-family
+  object because terrain is not assignable.
 
 ## Writing a specimen
 
@@ -105,6 +122,9 @@ Harness (`maps/visual_harness.py`):
 | `visual_expect(name, cond, detail)` | one eyes-free assertion, greppable as `VISUAL PASS/FAIL` |
 | `visual_planet_spawn(...)` | a gas giant with the whole `planet_*` knob set in one call |
 | `visual_reset_objects()` / `visual_reset_sim()` | tear the scene down (see the tick between them) |
+| `visual_widgets([[label, background], ...])` | draw controls under the card — for a specimen about how a CONTROL looks |
+| `visual_case(..., hold=20)` | how long a sweep should leave this one up; a specimen that plays out over time must say so |
+| `visual_generation()` | the scene counter a long-running driver checks — object ids are recycled, this is not |
 
 ## Rules the range holds itself to
 

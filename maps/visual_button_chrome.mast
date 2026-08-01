@@ -1,0 +1,61 @@
+# SPECIMEN: button chrome - the look-question that gates gui_flat_button.
+#
+# CINEMATIC_PLAN.md wants a "flat" control: text on a background, no engine skin, usable as a
+# hot zone over a face or a rundown tile. Before building one it is worth knowing what the
+# existing controls actually look like, because `Button.background_color` ALREADY exists and
+# is drawn as send_gui_colorbutton + send_gui_text. If a colorbutton is a flat fill, the flat
+# button essentially exists and the work is ergonomics and states; if it carries the same
+# image chrome, it does not, and the clickregion is the only skin-free widget.
+#
+# Only an eye can answer that, which is what this range is for.
+#
+# The second question is the palette one: a clickregion (and, it seems, a colorbutton) carries
+# a PSEUDO-HOVER highlight. A tint over a bright fill may be invisible, so the backgrounds
+# below run light to dark deliberately - hover each one and see where the highlight still
+# reads. That decides the default background for flat furniture.
+#
+# Drawn over the live 3D view on purpose: overlay furniture will sit over exactly that, and
+# draw order against a moving background is not a thing a unit test can judge.
+
+@map/visual_button_chrome "Visual: button chrome"
+" Plain button vs background_color at five tones - is a colorbutton flat, and where does hover read?
+    visual_set_index_by_name("button_chrome")
+    await task_schedule(run_visual_button_chrome)
+    ->END
+
+
+=== run_visual_button_chrome
+metadata: ``` yaml
+type: visual/button_chrome
+```
+    # Something moving behind the controls, so draw order and legibility are both judgeable.
+    _subject = to_object(npc_spawn(0, 0, 0, "Backdrop", "tsn", "starbase_command", "behav_station"))
+    for _bi in range(9):
+        terrain_spawn(0 - 6000 + _bi * 1500, 0, 3000, f"ref{_bi}", "#,ref", "plain_asteroid_9", "behav_asteroid")
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, eye=(0, 1500, 0 - 4200))
+
+    # First row is the control: a plain gui_button, whatever the engine gives it. The rest set
+    # background_color, which routes through colorbutton + text.
+    _btns = ~~[
+        ["plain gui_button (no background)", ""],
+        ["background #eee (light)", "#eee"],
+        ["background #888 (mid)", "#888"],
+        ["background #222 (dark)", "#222"],
+        ["background #1576 (translucent)", "#1576"],
+        ["background #0000 (transparent)", "#0000"],
+    ]~~
+    visual_widgets(_btns)
+
+    _expect = ~~[
+        "row 1 is a normal button - note its skin: border, gradient, whatever the engine draws",
+        "rows 2-6 set background_color: do they still carry that skin, or are they FLAT fills?",
+        "if rows 2-6 are flat, the flat button already exists and only needs a name",
+        "hover each row: where does the highlight still read - over light, mid, dark, all?",
+        "row 6 is transparent: is it invisible, or does hover alone reveal it?",
+    ]~~
+    visual_case("Button chrome", _expect, subtitle="gates gui_flat_button (CINEMATIC_PLAN Phase 6)", notes="Button.background_color is drawn as colorbutton + text - this asks whether a colorbutton is skinned", data="6 rows, over a live 3D view so draw order is judgeable too")
+
+    visual_expect("chrome: backdrop spawned", _subject is not None)
+    visual_expect("chrome: six controls declared", len(visual_widget_specs()) == 6)
+    ->END

@@ -40,6 +40,7 @@
         await task_schedule(visual_run_index)
         # Hold long enough to actually look at it when a browser is attached; harmless
         # headless, where the point is the VISUAL PASS/FAIL lines each specimen prints.
-        await delay_sim(VISUAL_HOLD_SECONDS)
+        # A specimen that plays out over time asks for longer; the rest get the default.
+        await delay_sim(visual_hold(VISUAL_HOLD_SECONDS))
     visual_report()
     ->END

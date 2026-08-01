@@ -40,7 +40,7 @@ type: visual/camera_rate
         "if pass 2 is smooth and pass 1 is not, the mover must ride an object",
         "the card says which pass is running",
     ]~~
-    visual_case("Camera rate", _expect, subtitle="SPIKE Q3 - what can actually drive a move", notes="PASS 1 starting: position written on a repeating tick", data="same 9000u lateral move, ~8s each pass")
+    visual_case("Camera rate", _expect, subtitle="SPIKE Q3 - what can actually drive a move", notes="PASS 1 starting: position written on a repeating tick", data="same 9000u lateral move, ~8s each pass", hold=24)
 
     visual_expect("spike Q3: subject spawned", _subject is not None)
     ->END

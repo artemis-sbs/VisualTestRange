@@ -25,15 +25,21 @@ from sbs_utils.helpers import FrameContext
 # ---------------------------------------------------------------------------
 # The card: what this specimen is, and what you should be seeing.
 # ---------------------------------------------------------------------------
-_CARD = {"title": "", "subtitle": "", "expect": [], "notes": "", "data": "", "seq": 0}
+_CARD = {"title": "", "subtitle": "", "expect": [], "notes": "", "data": "", "seq": 0, "hold": None}
 
 
-def visual_case(title, expect, notes="", data="", subtitle=""):
+def visual_case(title, expect, notes="", data="", subtitle="", hold=None):
     """Declare the specimen. `expect` is the list of things a correct frame shows.
 
     Keep every string ASCII and brace-free: it is engine-rendered text, and a stray
     brace in a MAST assignment is an f-string SyntaxError reported against the caller.
+
+    `hold` is how many seconds a SWEEP should leave this one on screen. Default is the
+    stage's own VISUAL_HOLD_SECONDS, but a specimen that plays out over time has to say so:
+    the camera spikes reach their second half at t+10s and t+12s, and at the default 6s hold
+    a sweep tore them down first - so their most interesting half silently never ran.
     """
+    _CARD["hold"] = None if hold is None else float(hold)
     _CARD["title"] = str(title)
     _CARD["subtitle"] = str(subtitle)
     _CARD["expect"] = [str(e) for e in expect]
@@ -55,6 +61,31 @@ def visual_case_note(note):
     _CARD["seq"] += 1
     print(f"VISUAL NOTE {note}")
     log(f"VISUAL NOTE {note}", "visual")
+
+
+# Widgets a specimen wants drawn under its card. Most specimens are about the 3D view and
+# declare none; a specimen about a CONTROL's appearance has nowhere else to put it, because
+# only the console builds GUI. Kept declarative (data, not a builder label) so the console can
+# draw it without a way to call a label for its layout.
+_WIDGETS = []
+
+
+def visual_widgets(specs):
+    """Declare controls to draw under the card. Each spec is [label, background_or_empty]."""
+    _WIDGETS.clear()
+    for s in specs:
+        _WIDGETS.append([str(s[0]), str(s[1]) if len(s) > 1 else ""])
+    _CARD["seq"] += 1
+
+
+def visual_widget_specs():
+    return list(_WIDGETS)
+
+
+def visual_hold(default_seconds):
+    """Seconds the sweep should hold the current specimen - its own request, or the default."""
+    h = _CARD.get("hold")
+    return float(default_seconds) if h is None else h
 
 
 def visual_card():
@@ -179,6 +210,42 @@ def visual_camera_apply(client_id):
     return True
 
 
+# client_id -> its cambot. A specimen never knows client ids, but a CUT may need to move the
+# camera ship or re-assign the client, so the harness keeps the mapping the console builds.
+_CAMBOTS = {}
+
+
+def visual_cambot_move(x, y, z):
+    """Cut by JUMPING THE CAMERA SHIP: teleport every console's cambot. The lens rides it."""
+    from sbs_utils.procedural.query import to_object
+    from sbs_utils.vec import Vec3
+    moved = 0
+    for cam_id in list(_CAMBOTS.values()):
+        o = to_object(cam_id)
+        if o is not None:
+            o.pos = Vec3(x, y, z)
+            moved += 1
+    return moved
+
+
+def visual_client_assign(obj_id):
+    """Cut by RE-ASSIGNMENT: put every console on a different space object."""
+    from sbs_utils.procedural.query import to_id
+    oid = to_id(obj_id)
+    done = 0
+    for cid in list(_CAMBOTS.keys()):
+        try:
+            FrameContext.context.sbs.assign_client_to_ship(cid, oid)
+            done += 1
+        except Exception:
+            pass
+    return done
+
+
+def visual_cambots():
+    return dict(_CAMBOTS)
+
+
 def visual_client_cambot(client_id):
     """Give this console its own invisible cambot and assign the client to it, once.
 
@@ -194,6 +261,7 @@ def visual_client_cambot(client_id):
     if not cam:
         return None
     set_inventory_value(client_id, "visual_cambot", cam)
+    _CAMBOTS[client_id] = cam
     try:
         FrameContext.context.sbs.assign_client_to_ship(client_id, cam)
     except Exception:
@@ -515,6 +583,8 @@ def visual_reset_objects():
     _CARD["expect"] = []
     _CARD["title"] = ""
     _CARD["data"] = ""
+    _WIDGETS.clear()
+    _CAMBOTS.clear()    # the cambots are space objects too; the console remakes one on repaint
     _CAM["dolly"] = 0
 
 

@@ -21,6 +21,18 @@
         gui_row("row-height: content; padding: 2px, 4px, 2px, 6px;")
         gui_text(_line)
 
+    # Controls a SPECIMEN asked for. Only a console can build GUI, so a specimen about how a
+    # control LOOKS has nowhere else to put it; it declares them as data and they are drawn
+    # here, over the live view - which is also the only place their draw order can be judged.
+    _specs = visual_widget_specs()
+    if len(_specs) > 0:
+        gui_section("area: 50, 40, 99, 86;")
+        for _ws in _specs:
+            gui_row("row-height: 2.4em; padding: 3px, 6px, 3px, 6px;")
+            _sb = gui_button(_ws[0])
+            if _ws[1] != "":
+                _sb.background_color = _ws[1]
+
     # Controls, bottom right. Named widgets, not inline calls: an inline
     # `on gui_message(gui_button("x")):` is accepted by the mock and rejected by the
     # engine's stricter parser.
