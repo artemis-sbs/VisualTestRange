@@ -33,6 +33,7 @@ import maps/visual_nebula.mast
 import maps/visual_motion.mast
 import maps/visual_shield_rings.mast
 import maps/visual_button_chrome.mast
+import maps/visual_lower_third_portrait.mast
 
 # --- Phase 0 camera spikes (CINEMATIC_PLAN.md) -----------------------------
 import maps/visual_camera_offsets.mast

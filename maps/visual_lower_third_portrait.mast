@@ -1,0 +1,78 @@
+# SPECIMEN: the lower third that carries ONE face, on either side.
+#
+# CINEMATIC_PLAN Phase 5. A conversation is NOT two portraits on screen at once - it is this
+# one strip shown repeatedly with the face ALTERNATING sides. One face keeps the strip's width
+# for the line instead of spending it on someone who is not talking, and it still reads for a
+# monologue or a three-hander, which a fixed two-face layout does not.
+#
+# What only an eye can settle:
+#   - does the alternation actually read as a back-and-forth, or just as a jumping portrait?
+#   - is 22% the right portrait width - is the face big enough to recognise, and is the line
+#     still comfortable in what is left?
+#   - does the strip hold up over a LIVE 3D view, which is where it will always live?
+#
+# The last two beats are deliberately awkward: a long line (so the cycling split is judged
+# against the REDUCED width, not the full strip) and a speaker with no face (so a run of beats
+# is checked for sideways jump when the portrait column is empty).
+
+@map/visual_lower_third_portrait "Visual: lower third portrait"
+" One face, left or right, alternating - the conversation lower third over a live view.
+    visual_set_index_by_name("lower_third_portrait")
+    await task_schedule(run_visual_lower_third_portrait)
+    ->END
+
+
+=== run_visual_lower_third_portrait
+metadata: ``` yaml
+type: visual/lower_third_portrait
+```
+    # Something behind the strip, because legibility over a moving view is the whole question.
+    _ltp_subject = to_object(npc_spawn(0, 0, 0, "Backdrop", "tsn", "starbase_command", "behav_station"))
+    for _ltp_i in range(9):
+        terrain_spawn(0 - 6000 + _ltp_i * 1500, 0, 3000, f"ltpref{_ltp_i}", "#,ref", "plain_asteroid_9", "behav_asteroid")
+    _ltp_anchor = visual_anchor(0, 0, 0)
+    visual_camera(_ltp_anchor, eye=(0, 1500, 0 - 4200))
+
+    _ltp_face_a = random_terran()
+    _ltp_face_b = random_terran()
+
+    # name, align, line. Two speakers trading the strip, then the two awkward cases.
+    _ltp_beats = ~~[
+        ["Harkin", "left",  "Phoenix, we have movement on the far side of the belt."],
+        ["Reyes",  "right", "Confirmed - two contacts running dark, holding formation."],
+        ["Harkin", "left",  "Hold station and keep the belt between us until they commit to a heading; I am not giving away our position for a pair of contacts that may well be freighters."],
+        ["Reyes",  "right", "Understood. Holding."],
+        ["",       "left",  "This beat has NO face - the column should stay reserved, not jump."],
+    ]~~
+
+    _ltp_expect = ~~[
+        "one face at a time - never two portraits on the strip at once",
+        "the face swaps left/right between speakers, and that alternation reads as a conversation",
+        "the name and the line sit BESIDE the face and justify toward it, not away from it",
+        "the face is large enough to recognise and the line is still comfortable beside it",
+        "beat 3 is long: it plays in TIMED PARTS that each fit next to the portrait, never clipped",
+        "beat 5 has no face: the portrait column stays reserved, so the text does not slide sideways",
+        "the strip stays readable over the moving view behind it",
+    ]~~
+    visual_case("Lower third portrait", _ltp_expect, subtitle="CINEMATIC_PLAN Phase 5 - one face, align left/right", notes="a conversation alternates align; it is not a two-face layout", data="portrait column 22% of the strip, line measured against the rest; 5 beats, twice through")
+
+    _ltp_n = 0
+---ltp_beat
+    _ltp_b = _ltp_beats[_ltp_n % len(_ltp_beats)]
+    _ltp_align = _ltp_b[1]
+    _ltp_name = _ltp_b[0]
+    # No name marks the faceless beat; otherwise the face follows the side.
+    _ltp_face = None
+    if _ltp_name == "Harkin":
+        _ltp_face = _ltp_face_a
+    if _ltp_name == "Reyes":
+        _ltp_face = _ltp_face_b
+    overlay_lower_third_portrait(_ltp_name, _ltp_b[2], face=_ltp_face, align=_ltp_align)
+    await delay_sim(5)
+    _ltp_n += 1
+    jump ltp_beat if _ltp_n < 10
+
+    visual_expect("portrait: backdrop spawned", _ltp_subject is not None)
+    visual_expect("portrait: two distinct faces generated", _ltp_face_a != _ltp_face_b)
+    visual_expect("portrait: every beat ran", _ltp_n == 10)
+    ->END
