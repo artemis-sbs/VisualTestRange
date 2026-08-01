@@ -7,8 +7,9 @@
 #
 # What only an eye can settle:
 #   - does the alternation actually read as a back-and-forth, or just as a jumping portrait?
-#   - is 22% the right portrait width - is the face big enough to recognise, and is the line
-#     still comfortable in what is left?
+#   - is the strip the right HEIGHT - the face is a square sized from it, so the row height is
+#     what decides how big the portrait reads and how much is left for the line;
+#   - is the gutter between face and text the right thickness?
 #   - does the strip hold up over a LIVE 3D view, which is where it will always live?
 #
 # The last two beats are deliberately awkward: a long line (so the cycling split is judged
@@ -50,11 +51,13 @@ type: visual/lower_third_portrait
         "the face swaps left/right between speakers, and that alternation reads as a conversation",
         "the name and the line sit BESIDE the face and justify toward it, not away from it",
         "the face is large enough to recognise and the line is still comfortable beside it",
+        "nothing spills OUTSIDE the strip - not the line, not the name, on either side",
+        "the gap between face and text reads as a deliberate gutter, not a collision",
         "beat 3 is long: it plays in TIMED PARTS that each fit next to the portrait, never clipped",
         "beat 5 has no face: the portrait column stays reserved, so the text does not slide sideways",
         "the strip stays readable over the moving view behind it",
     ]~~
-    visual_case("Lower third portrait", _ltp_expect, subtitle="CINEMATIC_PLAN Phase 5 - one face, align left/right", notes="a conversation alternates align; it is not a two-face layout", data="portrait column 22% of the strip, line measured against the rest; 5 beats, twice through")
+    visual_case("Lower third portrait", _ltp_expect, subtitle="CINEMATIC_PLAN Phase 5 - one face, align left/right", notes="a conversation alternates align; it is not a two-face layout", data="face is a SQUARE sized from the 6em row; text is flex; line measured against what is left; 5 beats, twice through")
 
     _ltp_n = 0
 ---ltp_beat
