@@ -7,10 +7,9 @@ try:
 
     class VisualRangePage(StoryPage):
         story_file = "story.mast"
-        # The server drives the range (picker + scene building); a client is only ever a
-        # viewport onto the specimen, so the two start at different labels.
-        main_server = "visual_server_start"
-        main_client = "visual_client_start"
+        # No main_server / main_client override: the LM consoles addon reroutes the server to
+        # its mission picker and clients to its console select, which is where the range's map
+        # selection comes from. Overriding these is what bypassed it.
 
     Mast.include_code = True   # show MAST source in runtime errors
 

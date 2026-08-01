@@ -2,5 +2,8 @@
     "sbslib": [
         "artemis-sbs.sbs_utils.v1.4.0.sbslib"
     ],
-    "mastlib": []
+    "mastlib": [
+        "artemis-sbs.LegendaryMissions.consoles.v1.4.0.mastlib",
+        "artemis-sbs.LegendaryMissions.prefabs.v1.4.0.mastlib"
+    ]
 }

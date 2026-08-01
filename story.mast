@@ -33,46 +33,45 @@ import maps/visual_nebula.mast
 import maps/visual_motion.mast
 import maps/visual_shield_rings.mast
 
+# --- Phase 0 camera spikes (CINEMATIC_PLAN.md) -----------------------------
+import maps/visual_camera_offsets.mast
+import maps/visual_camera_cut.mast
+import maps/visual_camera_rate.mast
 
-== visual_server_start ==
-    # A tool mission: no connect dialog, and a sim we control from a known blank state.
-    sbs.suppress_client_connect_dialog(0)
-    sim_create()
-    sim_resume()
 
-    # Two sides is all any specimen needs (a friendly and something to shoot at). Registered
-    # once here because they are the baseline visual_reset() deliberately keeps.
+# A tool mission: no connect dialog.
+sbs.suppress_client_connect_dialog(0)
+
+# How long visual_all holds each specimen on screen before building the next.
+shared VISUAL_HOLD_SECONDS = 6
+
+
+# The LM consoles addon owns the way in, exactly as it does for LM Test Range: its
+# server_console draws the mission picker from the @map roster, applies the map's Defaults,
+# task_schedules the chosen map, sets GAME_STARTED and handles --map / AUTO_START. So a
+# specimen needs no launch code of its own and a new @map/visual_* appears in the picker for
+# free. The two routes below are all the range adds on top.
+
+//shared/signal/create_sides
+    # start_server emits this before player ships and before any map runs, so side keys
+    # resolve. Two sides is all any specimen needs (a friendly and something to shoot at),
+    # and they are the baseline visual_reset_objects() deliberately keeps. side_ensure is
+    # idempotent, so this stays safe to re-run - which it must be, since a mid-mission
+    # sim_create leaves the sim handle stale for the rest of the frame.
     side_ensure("tsn", "TSN")
     side_ensure("raider", "Raider")
     side_set_relations("tsn", "raider", sbs.DIPLOMACY.HOSTILE)
 
-    # How long visual_all holds each specimen on screen before building the next.
-    shared VISUAL_HOLD_SECONDS = 6
-    default shared SETTINGS = settings_get_defaults()
 
-    task_schedule(visual_autostart)
-    jump visual_stage
+//shared/signal/game_started
+    # Hand the screens to the range once a specimen has been launched.
+    task_schedule(visual_present)
 
 
-=== visual_autostart
-    # Honor a map chosen outside the stage: `--map <name>` (the runner writes WORLD_SELECT +
-    # AUTO_START into the settings) and the engine's own map selection both arrive this way.
-    # Without it the range just opens on the stage, which is the normal way in.
-    ->END if not SETTINGS.get("AUTO_START", False)
-    _want = SETTINGS.get("WORLD_SELECT")
-    ->END if _want is None
-    for _m in maps_get_list():
-        if _m.path == _want:
-            # The handshake the dev runner watches for: without GAME_STARTED it assumes the
-            # story never launched, and starts the map a SECOND time. Two copies of a
-            # specimen sweep interleave - one resets the sim while the other is mid-spawn.
-            shared GAME_STARTED = True
-            task_schedule(_m)
-            ->END
-    log(f"visual: no @map matched WORLD_SELECT {_want}", "visual")
+=== visual_present
+    # A tick late on purpose: start_server does its OWN gui_reroute_clients(game_started_console)
+    # immediately AFTER emitting game_started, so rerouting inline would just be overwritten.
+    await delay_sim(1)
+    gui_reroute_server("visual_stage")
+    gui_reroute_clients("visual_viewport")
     ->END
-
-
-== visual_client_start ==
-    # A client is only ever a second viewport onto whatever the server is showing.
-    jump visual_viewport
