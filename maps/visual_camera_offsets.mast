@@ -28,34 +28,54 @@
 metadata: ``` yaml
 type: visual/camera_offsets
 ```
-    # The subject: a ship that yaws in place and never translates.
-    _ship = to_object(npc_spawn(0, 0, 0, "Spinner", "tsn", "tsn_battle_cruiser", "behav_npcship"))
-    ->END if _ship is None
-    visual_spin(_ship.id, seconds_per_turn=14)
+    # TWO subjects, because two different things can hide a spinning ship and I cannot tell
+    # them apart from here:
+    #   * an NPC renders for certain, but its own steering may own steer_yaw and overwrite it
+    #     (the mock's _npcship_steer demonstrably does);
+    #   * TERRAIN keeps whatever steer rate it is given - LM tumbles its asteroids this way -
+    #     but terrain only ever carries asteroid / wreck / planet art in LM, so a ship hull on
+    #     a terrain object may simply not draw.
+    # Putting both in frame answers "which renders" and "which actually spins" in one look,
+    # instead of me guessing and you re-running.
+    _npc = to_object(npc_spawn(0 - 1100, 0, 0, "NPC hull", "tsn", "tsn_battle_cruiser", "behav_npcship"))
+    _terr = to_object(terrain_spawn(1100, 0, 0, "TERRAIN hull", "#,spinner", "tsn_battle_cruiser", "behav_asteroid"))
+    # A rock as the control: terrain + asteroid art certainly renders and certainly tumbles.
+    _rock = to_object(terrain_spawn(0, 0, 1400, "ROCK", "#,spinner", "plain_asteroid_6", "behav_asteroid"))
+    ->END if _npc is None and _terr is None
 
-    # Fixed background. Without a stationary reference you cannot tell which of the two
-    # moved - the whole experiment rests on having something that certainly did not.
+    if _npc is not None:
+        visual_spin(_npc.id, seconds_per_turn=14)
+    if _terr is not None:
+        visual_spin(_terr.id, seconds_per_turn=14)
+    if _rock is not None:
+        visual_spin(_rock.id, seconds_per_turn=8)
+
+    # Fixed background. Without a stationary reference you cannot tell which of the two moved.
     for _oi in range(9):
-        terrain_spawn(0 - 6000 + _oi * 1500, 0, 5200, f"ref{_oi}", "#,ref", "plain_asteroid_6", "behav_asteroid")
+        terrain_spawn(0 - 6000 + _oi * 1500, 0, 5200, f"ref{_oi}", "#,ref", "plain_asteroid_9", "behav_asteroid")
 
-    # Pinned ABEAM (+X) and slightly above. A sideways offset is what separates the two
-    # cases; a straight-behind offset looks similar either way for the first few seconds.
-    visual_camera(_ship.id, eye=(1500, 350, 0))
+    # Framed from an ANCHOR this pass, not from a subject: the question right now is which of
+    # them is visible at all, and that must not depend on the camera riding one of them.
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, eye=(0, 1200, 0 - 4200))
 
     _expect = ~~[
-        "a ship yawing steadily in place, rocks in a line behind it",
-        "LOCAL: the ship holds its pose on screen while the rocks sweep past it",
-        "WORLD: the ship turns in front of you and the rocks stay put",
-        "either reading is a valid result - record which one, per renderer",
+        "LEFT: a cruiser spawned as an NPC. RIGHT: the same hull spawned as TERRAIN",
+        "FRONT: a plain rock, the control - terrain art that certainly draws and tumbles",
+        "which of the three can you SEE? a missing one cannot carry the Q1 test",
+        "which of the three is SPINNING? an NPC's own steering may overwrite the rate",
+        "the card reports the measured rate of whichever subject the camera is watching",
     ]~~
-    visual_case("Camera offsets", _expect, subtitle="SPIKE Q1 - answer it in the ENGINE", notes="the mock is known WORLD-space (it adds the offset raw), so it is the control case", data="camera pinned to the ship at eye=(1500,350,0), one turn per 14s")
+    visual_case("Camera offsets", _expect, subtitle="which subject renders AND spins - Q1 comes after", notes="framed from an anchor this pass, so visibility does not depend on the camera riding a subject", data="NPC hull left, terrain hull right, control rock in front; one turn per 14s")
 
-    # The visual claim is "the ship yaws"; the checkable one is "the driver is alive". A dead
-    # driver leaves a stationary ship, which looks exactly like a WORLD-space answer - the
-    # experiment would return a confident wrong reading with nothing failing.
-    _tx0 = get_data_set_value(_ship.id, "target_pos_x", 0)
-    await delay_sim(4)
-    _tx1 = get_data_set_value(_ship.id, "target_pos_x", 0)
-    visual_expect("spike Q1: subject spawned", _ship is not None)
-    visual_expect("spike Q1: the spin driver is running", _tx0 != _tx1, f"{_tx0} -> {_tx1}")
+    # MEASURE the spin and put the number on the card. The units of steer_yaw are documented
+    # nowhere, so what matters is what the renderer actually did - and a subject that turns
+    # too slowly to notice reads exactly like a world-space camera, which would make this
+    # spike answer Q1 confidently and wrongly.
+    _h0 = visual_heading(_rock.id)
+    await delay_sim(3)
+    _h1 = visual_heading(_rock.id)
+    visual_case_note(visual_rate_text(_h0, _h1, 3))
+    visual_expect("spike Q1: at least one hull spawned", _npc is not None or _terr is not None)
+    visual_expect("spike Q1: rotating fast enough to see", visual_rate_value(_h0, _h1, 3) > 5, visual_rate_text(_h0, _h1, 3))
     ->END

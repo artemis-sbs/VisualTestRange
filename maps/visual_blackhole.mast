@@ -28,8 +28,14 @@ type: visual/blackhole
     _b = terrain_spawn_black_hole(9000, 0, 0, gravity_radius=4000)
     set_data_set_value(to_id(_b), "radar_color_override", "#6cf", 0)
 
-    # Something with a known size, right at the edge of A's well, so the scale is readable.
-    _ref = npc_spawn(1500, 0, 0, "Ruler", "tsn", "tsn_light_cruiser", "behav_npcship")
+    # Something with a known size for scale - placed in the GAP between the two wells, not at
+    # the edge of one. At 1500 it sat exactly on hole A's gravity radius, was dragged in, and
+    # reached the centre, where a pulled object has no direction left to be pulled in: its
+    # position goes NaN and the engine asserts. Nothing here destroys a craft that falls in
+    # (LM's lethal-proximity watch lives in an addon this range does not load), so a specimen
+    # must not put anything inside a well it does not intend to lose.
+    # A reaches 1500; B is at 9000 reaching 5000..13000. 3200 is clear of both.
+    _ref = npc_spawn(3200, 0, 0, "Ruler", "tsn", "tsn_light_cruiser", "behav_npcship")
 
     _anchor = visual_anchor(4500, 0, 0)
     visual_camera(_anchor, eye=(0, 6000, 0 - 9000))

@@ -1,26 +1,24 @@
-# SPIKE Q2 + Q4: what a CUT actually is, and what happens when the live dolly is deleted.
+# SPIKE: what makes a camera change actually TAKE, and what a deleted dolly does.
 #
-# There are three ways to change what the audience sees, and they are not the same mechanism:
+# Engine-observed so far: a change only took when the console was ASSIGNED to the object the
+# lens rides, and the assignment has to come FIRST - assign, then point. Re-pointing alone was
+# a black screen. These four beats separate the variables so that is confirmed rather than
+# inferred from one lucky run:
 #
-#   A  SWAP THE DOLLY ID   - re-point cinematic_control at a different object.
-#                            This is what LM's Game Master does when the selection changes.
-#   B  JUMP THE CAMERA SHIP - keep the same dolly, teleport it. The lens rides the object.
-#   C  RE-ASSIGN THE CLIENT - put the console on a different space object entirely.
+#   1  POINT ONLY          re-point to camB, client left where it was.       (the control)
+#   2  ASSIGN THEN POINT   identical, except the client is assigned to camA first.
+#   3  MOVE                no id change, no reassignment: the cambot the lens is already
+#                          riding is teleported.
+#   4  DELETE              the live dolly is destroyed under a live pin.
 #
-# Which of these SNAPS and which (if any) slides decides how a rundown punch is built, and
-# whether a cutscene's shot list can change angle without a visible swoop. The plan currently
-# assumes all three are instantaneous; if any of them travels, that assumption is wrong and
-# transitions have to be designed rather than assumed.
+# Beats 1 and 2 differ by EXACTLY one thing, so whichever draws answers whether assignment is
+# required. Beat 3 asks whether moving differs from re-pointing. Beat 4 decides whether
+# releasing the camera before cleanup has to be a rule in the API.
 #
-# Q4 rides along at the end: the live dolly is deleted out from under the view. Cutscenes tear
-# their scenes down, so if a dangling id freezes the picture or drops it to the origin, every
-# shot must release the camera BEFORE cleanup - and that ordering belongs in the API, not in
-# the memory of whoever writes the next cutscene.
-#
-# The card announces each beat as it happens, so a transition is always attributable.
+# The card names each beat as it fires, so a black frame is always attributable.
 
-@map/visual_camera_cut "Visual: camera cut (spike Q2/Q4)"
-" Three different cut mechanisms in turn, then the live camera post is deleted.
+@map/visual_camera_cut "Visual: camera cut (spike)"
+" Four beats: point only, assign-then-point, move, delete. Which of them draws?
     visual_set_index_by_name("camera_cut")
     await task_schedule(run_visual_camera_cut)
     ->END
@@ -37,28 +35,26 @@ type: visual/camera_cut
     for _ci in range(7):
         terrain_spawn(0 - 4500 + _ci * 1500, 0, 3000, f"ref{_ci}", "#,ref", "plain_asteroid_8", "behav_asteroid")
 
-    # A second subject for the re-assignment beat, far enough that landing on it is obvious.
-    _other = to_object(npc_spawn(12000, 0, 0, "Elsewhere", "tsn", "tsn_battleship", "behav_npcship"))
-
-    shared VISUAL_CUT_A = visual_anchor(0, 400, 0 - 2200, "camA")
-    shared VISUAL_CUT_B = visual_anchor(2600, 1500, 1800, "camB")
+    # Two viewpoints. Both anchors sit ON THE PLANE with their height carried in the eye
+    # offset, matching every specimen that renders correctly in the engine - the two that did
+    # not were the only ones putting height into the anchor and pinning with a zero offset.
+    shared VISUAL_CUT_A = visual_anchor(0, 0, 0 - 2200, "camA")
+    shared VISUAL_CUT_B = visual_anchor(2600, 0, 1800, "camB")
     shared VISUAL_CUT_SUBJECT = _subject.id
-    shared VISUAL_CUT_OTHER = to_id(_other)
 
-    visual_camera(VISUAL_CUT_A, eye=(0, 0, 0), target_id=_subject.id)
+    visual_camera(VISUAL_CUT_A, eye=(0, 400, 0), target_id=_subject.id)
     task_schedule(visual_camera_cut_driver)
 
     _expect = ~~[
-        "beat 1 SWAP DOLLY: the view re-points to a high three-quarter angle",
-        "beat 2 MOVE CAMERA SHIP: the same dolly is teleported instead",
-        "beat 3 RE-ASSIGN: the console is put on a different ship entirely",
-        "for each: INSTANT is a cut, TRAVELLING is a blend - they may not all behave alike",
-        "beat 4 the live camera post is DELETED - note whether the view holds or falls away",
+        "beat 1 POINT ONLY: lens asked to move to camB, client left where it was",
+        "beat 2 ASSIGN THEN POINT: assigned to camA first, then the lens moved to it",
+        "1 and 2 differ by exactly one thing - whichever draws answers whether assign is needed",
+        "beat 3 MOVE: no id change, no reassign - the cambot the lens rides is teleported",
+        "beat 4 the live dolly is DELETED - does the view hold, or fall away?",
     ]~~
-    visual_case("Camera cut", _expect, subtitle="SPIKE Q2 - three cut mechanisms, and Q4", notes="beat 1 of 4: SWAP THE DOLLY ID (what the Game Master does)", data="one beat every 4s; the card names each as it fires", hold=24)
+    visual_case("Camera cut", _expect, subtitle="does a change need the assignment, and in which order", notes="beat 1 of 4: POINT ONLY (no reassignment)", data="one beat every 4s; the card names each as it fires", hold=24)
 
-    visual_expect("spike Q2: two camera posts exist", VISUAL_CUT_A and VISUAL_CUT_B)
-    visual_expect("spike Q2: a re-assignment target exists", VISUAL_CUT_OTHER)
+    visual_expect("cut: two camera posts exist", VISUAL_CUT_A and VISUAL_CUT_B)
     ->END
 
 
@@ -67,36 +63,46 @@ type: visual/camera_cut
     # wake this loop up inside a later specimen.
     _gen = visual_generation()
 
-    # --- beat 1: SWAP THE DOLLY ID ------------------------------------------------
+    # --- beat 1: POINT ONLY --------------------------------------------------------
     await delay_sim(4)
     ->END if visual_generation() != _gen
-    visual_camera(VISUAL_CUT_B, eye=(0, 0, 0), target_id=VISUAL_CUT_SUBJECT)
-    visual_case_note("beat 1 fired: SWAPPED THE DOLLY ID - snap or slide?")
+    visual_camera(VISUAL_CUT_B, eye=(0, 400, 0), target_id=VISUAL_CUT_SUBJECT, assign=False)
+    visual_expect("cut: beat 1 reached a console", visual_camera_delivered() > 0, f"{visual_camera_delivered()} consoles")
+    visual_case_note("beat 1: POINTED at camB. Client NOT reassigned.")
 
-    # --- beat 2: MOVE THE CAMERA SHIP ---------------------------------------------
-    # Same dolly the whole time; the console's own cambot is teleported instead, and the lens
-    # rides it. Pin to the cambot first so the move is what changes the picture.
+    # --- beat 2: ASSIGN THEN POINT -------------------------------------------------
+    # The order matters and it is this way round: the Game Master says so outright ("Assign
+    # before setting comms up"), and the beat observed to work did it in this order. A yield
+    # between them, because the engine wants a beat between assigning and pointing.
     await delay_sim(4)
     ->END if visual_generation() != _gen
+    visual_client_assign(VISUAL_CUT_A)
+    await delay_sim(0)
+    visual_camera(VISUAL_CUT_A, eye=(0, 400, 0), target_id=VISUAL_CUT_SUBJECT)
+    visual_case_note("beat 2: ASSIGNED to camA, then POINTED at it")
+
+    # --- beat 3: MOVE THE OBJECT THE LENS IS ALREADY ON ----------------------------
+    # Back onto the cambot, point at it, and only then move it - so the move is the single
+    # thing under test.
+    await delay_sim(4)
+    ->END if visual_generation() != _gen
+    visual_client_assign_back()
+    await delay_sim(0)
     _cams = visual_cambots()
     for _cid in _cams:
         visual_camera(_cams[_cid], eye=(0, 300, 0 - 1500), target_id=VISUAL_CUT_SUBJECT)
+    await delay_sim(1)
     visual_cambot_move(0 - 3000, 1200, 0 - 3000)
-    visual_case_note("beat 2 fired: MOVED THE CAMERA SHIP (same dolly, teleported)")
+    visual_case_note("beat 3: MOVED the cambot the lens is already riding")
 
-    # --- beat 3: RE-ASSIGN THE CLIENT ---------------------------------------------
+    # --- beat 4: delete the live dolly ----------------------------------------------
     await delay_sim(4)
     ->END if visual_generation() != _gen
-    visual_client_assign(VISUAL_CUT_OTHER)
-    visual_camera(VISUAL_CUT_OTHER, eye=(0, 200, 0 - 700), target_id=VISUAL_CUT_OTHER)
-    visual_case_note("beat 3 fired: RE-ASSIGNED the console to a different ship")
-
-    # --- beat 4: Q4, delete the live dolly ----------------------------------------
-    await delay_sim(4)
-    ->END if visual_generation() != _gen
-    visual_camera(VISUAL_CUT_B, eye=(0, 0, 0), target_id=VISUAL_CUT_SUBJECT)
+    visual_client_assign(VISUAL_CUT_B)
+    await delay_sim(0)
+    visual_camera(VISUAL_CUT_B, eye=(0, 400, 0), target_id=VISUAL_CUT_SUBJECT)
     await delay_sim(2)
     ->END if visual_generation() != _gen
     delete_object(VISUAL_CUT_B)
-    visual_case_note("beat 4 fired: live camera post DELETED - hold, or fall to the origin?")
+    visual_case_note("beat 4: live camera post DELETED - hold, or fall away?")
     ->END

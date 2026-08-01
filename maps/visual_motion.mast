@@ -34,19 +34,12 @@ type: visual/motion
 
     ->END if _npc is None or _half is None or _play is None
 
-    # Steer by destination, not by target: nothing here is a fight.
-    _npc.data_set.set("target_pos_x", _to, 0)
-    _npc.data_set.set("target_pos_y", 0, 0)
-    _npc.data_set.set("target_pos_z", 0 - _lane, 0)
-    _npc.data_set.set("throttle", 1.0, 0)
-    _half.data_set.set("target_pos_x", _to, 0)
-    _half.data_set.set("target_pos_y", 0, 0)
-    _half.data_set.set("target_pos_z", 0, 0)
-    _half.data_set.set("throttle", 0.5, 0)
-    _play.data_set.set("target_pos_x", _to, 0)
-    _play.data_set.set("target_pos_y", 0, 0)
-    _play.data_set.set("target_pos_z", _lane, 0)
-    _play.data_set.set("playerThrottle", 1.0, 0)
+    # Use the DOCUMENTED navigation call, not hand-written data_set keys. target_pos() sets
+    # the same keys plus whatever else the engine expects, and it is what every LM brain uses.
+    # Writing the keys by hand was modelling the MOCK, whose physics reads them directly.
+    target_pos(_npc.id, _to, 0, 0 - _lane, throttle=1.0)
+    target_pos(_half.id, _to, 0, 0, throttle=0.5)
+    target_pos(_play.id, _to, 0, _lane, throttle=1.0)
 
     _anchor = visual_anchor(0, 0, 0)
     visual_camera(_anchor, eye=(0, 5200, 0 - 7000))
@@ -61,5 +54,10 @@ type: visual/motion
     visual_case("Motion", _expect, subtitle="30Hz physics eased to 60Hz - stutter shows here", notes="press b to toggle the reference grid; it makes speed differences legible", data="NPC 36 u/s x coeff x throttle; player impulse 180 u/s, hull-independent")
 
     visual_expect("motion: throttles are set as intended", get_data_set_value(_npc.id, "throttle", 0) == 1.0 and get_data_set_value(_half.id, "throttle", 0) == 0.5)
-    visual_expect("motion: all three are under way", to_object(_npc.id) is not None and to_object(_play.id) is not None)
+    # "Under way" has to mean MOVED, not "still exists". The old check passed happily while
+    # nothing moved at all, which is how this specimen shipped broken to an engine session.
+    _x0 = _npc.pos.x
+    await delay_sim(4)
+    _x1 = _npc.pos.x
+    visual_expect("motion: the NPC actually travelled", abs(_x1 - _x0) > 100, f"x {_x0} -> {_x1}")
     ->END

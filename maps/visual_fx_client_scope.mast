@@ -38,8 +38,11 @@ type: visual/fx_client_scope
 
     # Frame fight A; fight B is off-camera on purpose - this specimen is about the STREAM,
     # not the framing, and the HUD beam/projectile census is where you read it.
-    _anchor = visual_anchor(450, 0, 300)
-    visual_camera(_anchor, eye=(0, 1600, 0 - 3000))
+    # Pin the camera AT the ship whose scope is under test, not at a neutral anchor. The
+    # camera now assigns the console to whatever it rides, so an anchor here would reassign
+    # the console away from the very ship whose culling this specimen exists to observe -
+    # the specimen would quietly be testing the anchor's scope instead.
+    visual_camera(_pa.id, eye=(0, 900, 0 - 2200), target_id=_ea.id)
 
     _expect = ~~[
         "server tab: both fights are streamed (the GM view is never culled)",

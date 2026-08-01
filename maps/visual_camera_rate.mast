@@ -66,10 +66,8 @@ type: visual/camera_rate
     visual_case_note("PASS 2 running: camera carried by a ship under its own throttle")
     _ship = to_object(npc_spawn(0 - 4500, 900, 0 - 3000, "Dolly", "tsn", "tsn_fighter", "behav_npcship"))
     ->END if _ship is None
-    _ship.data_set.set("target_pos_x", 4500, 0)
-    _ship.data_set.set("target_pos_y", 900, 0)
-    _ship.data_set.set("target_pos_z", 0 - 3000, 0)
-    _ship.data_set.set("throttle", 0.35, 0)
+    # target_pos(), not hand-written keys - the engine does not steer from those alone.
+    target_pos(_ship.id, 4500, 900, 0 - 3000, throttle=0.35)
     # Where the rig sits matters twice over:
     #   * NOT (0,0,0) - a camera on a ship's own position is INSIDE its mesh (only an
     #     invisible anchor is safe at zero offset);

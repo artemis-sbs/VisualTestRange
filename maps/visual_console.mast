@@ -8,11 +8,60 @@
 # cannot reproduce it), which is exactly the class of bug this range exists to catch. It
 # must not be the range's own bug.
 
+@console/visual_range !0 ^1 "Visual Range"
+" The specimen stage: the 3D view, the card, and Prev / Re-run / Next.
+#
+# A CONSOLE entry as well as the reroute, so a client that connects late - or one that gets
+# sent back to console select - can still choose the stage. The reroute only catches clients
+# that are already connected when the map starts.
+    jump visual_stage
+
+
 === visual_stage
+    # A scripted camera needs FOUR things in the engine, not two. Registering the widget list
+    # is the one that was missing, and without it the console simply has no viewport - the
+    # camera is streamed and lands nowhere. gui_layout_widget only PLACES a view the console
+    # has already declared; it does not declare it.
+    #   1. gui_activate_console  - the console has a type
+    #   2. gui_update_widget_list - it declares a 3dview
+    #   3. gui_layout_widget      - the 3dview is placed in the layout
+    #   4. assignment + cinematic_control (below)
+    # Console name copied from LM's Game Master, the proven scripted-camera console.
+    gui_activate_console("gamemaster_sci")
+    gui_update_widget_list("3dview")
     gui_layout_widget("3dview")
-    # The engine needs this console assigned to a space object before the cinematic camera
-    # means anything. Its own invisible cambot, once - the lens then moves independently.
-    visual_client_cambot(client_id)
+    # Camera setup runs as its own TASK, not inline, because the engine wants a beat between
+    # the steps: LM's Game Master waits a full second between spawning its cambot and
+    # assigning a client to it, and only sets the view up after that. Doing all three inside
+    # one console build is a plausible cause of a camera that works only sometimes.
+    if visual_camera_needs_setup(client_id):
+        task_schedule(visual_client_camera_setup, {"cam_client": client_id})
+        # ...and a SYNC loop, the way both working consoles do it. The Game Master re-applies
+        # its camera on every selection change AND unconditionally every ~15s ("every 15 sec
+        # move camra anyway"); Manual Beams re-applies on every console rebuild. Neither
+        # relies on a single call landing. This range fired once per change, from a
+        # SPECIMEN's task rather than from the console - so a call lost to a race was never
+        # corrected, which is what "works sometimes" looks like from the outside.
+        task_schedule(visual_camera_sync, {"cam_client": client_id})
+
+    # AND apply it inline, here in the console's own build, exactly where Manual Beams does
+    # (`gui_cinematic_full_control` sits in its build, before its await gui()). Every working
+    # console sets its camera from a GUI context - Manual Beams inline, the Game Master from a
+    # gui_sub_task of its console. This range only ever set it from plain tasks with no page
+    # context, which is the last structural difference left between it and the two that work.
+    #
+    # It also makes the repaint the real heartbeat: the stage rebuilds on every card change,
+    # so the camera is re-asserted whenever a specimen changes anything.
+    #visual_camera_apply(client_id)
+
+    # A specimen about PER-CLIENT differences (what this console can see vs another) has to
+    # put this console on a ship - the FX stream is culled around the assigned ship, not the
+    # camera. A specimen that cares tags one ship "visual_client_ship"; the rest never do,
+    # and this is a no-op for them.
+    _mine = to_object_list(role("visual_client_ship"))
+    if len(_mine) > 0:
+        sbs.assign_client_to_ship(client_id, _mine[0].id)
+    await delay_sim(0)
     visual_camera_apply(client_id)
 
     # The card, bottom left, over the view.
@@ -63,17 +112,11 @@
 
 
 === visual_viewport
+    gui_activate_console("gamemaster_sci")
+    gui_update_widget_list("3dview")
     gui_layout_widget("3dview")
-    visual_client_cambot(client_id)
-    visual_camera_apply(client_id)
-
-    # A specimen about PER-CLIENT differences (what this console can see vs another) has to
-    # put this console on a ship - the FX stream is culled around the assigned ship, not the
-    # camera. A specimen that cares tags one ship "visual_client_ship"; the rest never do,
-    # and this is a no-op for them.
-    _mine = to_object_list(role("visual_client_ship"))
-    if len(_mine) > 0:
-        sbs.assign_client_to_ship(client_id, _mine[0].id)
+    if visual_camera_needs_setup(client_id):
+        task_schedule(visual_client_camera_setup, {"cam_client": client_id})
 
     gui_section("area: 1, 52, 46, 99;")
     for _line in visual_card_lines():
@@ -90,3 +133,37 @@
         jump visual_viewport
 
     await gui()
+
+
+=== visual_client_camera_setup
+metadata: ``` yaml
+cam_client: 0
+```
+    # Spawn, wait, assign, wait, point. The waits are the point: the Game Master sequences it
+    # this way and the range did not. Loops so it self-heals - every specimen switch deletes
+    # the cambot along with the rest of the scene, and the console must get a new one without
+    # anybody remembering to ask.
+---cam_setup
+    _cam = visual_client_cambot(cam_client)
+    ->END if _cam is None
+    await delay_sim(1)
+    visual_client_assign_one(cam_client, _cam)
+    await delay_sim(1)
+    visual_camera_apply(cam_client)
+---cam_watch
+    await delay_sim(2)
+    jump cam_setup if not object_exists(_cam)
+    jump cam_watch
+
+
+=== visual_camera_sync
+metadata: ``` yaml
+cam_client: 0
+```
+    # Re-apply this console's current pin, forever. Cheap - it is one engine call every couple
+    # of seconds - and it means a dropped camera heals itself instead of needing a specimen to
+    # change something before the view comes back.
+---cam_beat
+    await delay_sim(2)
+    visual_camera_apply(cam_client)
+    jump cam_beat

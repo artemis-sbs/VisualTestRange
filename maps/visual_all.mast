@@ -4,14 +4,12 @@
 # else here is convenience around it.
 
 === visual_run_index
-    # Tear the previous scene down in two beats. Deletion is deferred, and blanking the sim
-    # restarts the object-id counter - fuse them and the next scene is handed ids that are
-    # still queued for freeing, so most of it never survives being spawned. Each step gets
-    # its own tick: one for the frees to land, one because sim_create() leaves the sim handle
-    # stale for the rest of the frame.
+    # ONE SIM for the whole session. Only the scene's own objects go; the sim itself is never
+    # blanked and each console's cambot is never destroyed, so a console is set up once at
+    # startup and stays set up. sim_create() between specimens was what forced a camera
+    # rebuild at every switch, and that rebuild needs a tick between assigning and pointing -
+    # so the timing bug came back on every transition instead of being a one-off at startup.
     visual_reset_objects()
-    await delay_sim(1)
-    visual_reset_sim()
     await delay_sim(1)
     _lbl = visual_label_at()
     if _lbl is None:
@@ -43,4 +41,18 @@
         # A specimen that plays out over time asks for longer; the rest get the default.
         await delay_sim(visual_hold(VISUAL_HOLD_SECONDS))
     visual_report()
+    ->END
+
+
+=== visual_rebuild_cambots
+    # Only a safety net now. With one sim for the session a cambot should never go missing;
+    # if one has, this re-establishes it with the tick between assigning and pointing that the
+    # engine requires. Nothing calls it on the normal path.
+    for _cc in visual_console_clients():
+        _rc = visual_client_cambot(_cc)
+        if _rc is not None:
+            await delay_sim(1)
+            visual_client_assign_one(_cc, _rc)
+            await delay_sim(1)
+            visual_camera_apply(_cc)
     ->END

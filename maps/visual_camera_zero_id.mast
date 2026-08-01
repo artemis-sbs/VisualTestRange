@@ -1,0 +1,79 @@
+# SPIKE: what does dollyID / targetID == 0 mean?
+#
+# LM's manual_weapons passes `gui_cinematic_full_control(client_id, 0, source, 0, source)` with
+# both offsets zero, and the ship-id version commented out on the line above it. Two readings,
+# and they lead to very different APIs:
+#
+#   WORLD SPACE   0 means "no object - the vector IS a world position". Then a shot needs no
+#                 anchor object at all: a cutscene can name coordinates and stop spawning and
+#                 deleting a post per shot. This would be the useful answer.
+#   ASSIGNED SHIP 0 means "the client's own ship", so the offsets stay relative to it and
+#                 assignment does double duty.
+#   NEUTRALISED   0 with a zero offset is how manual_weapons DISABLES the scripted camera and
+#                 falls back to the console's default forward view. (Its offsets being zero is
+#                 what makes this plausible: a world-space reading would put the camera at the
+#                 origin looking AT the origin, which is degenerate.)
+#
+# The three are told apart by WHERE THE VIEW ENDS UP, so this specimen puts two unmistakable
+# landmarks 20km apart and asks for each in turn by absolute coordinate. The console's cambot
+# is parked at y=100000, far from both, so an "assigned ship" reading shows empty space and
+# cannot be confused with either landmark.
+#
+#   beat 1  dolly=0 eye=(0,800,-2500) look at (0,0,0)         -> starbase framed = WORLD SPACE
+#   beat 2  dolly=0 eye=(20000,800,-2500) look at (20000,0,0) -> the FAR landmark = WORLD SPACE
+#   either beat showing empty sky      -> ASSIGNED SHIP (the parked cambot)
+#   either beat showing the default forward view, unchanged   -> NEUTRALISED
+
+@map/visual_camera_zero_id "Visual: camera id 0 (spike)"
+" Does dollyID 0 mean a world-space position, the assigned ship, or no camera at all?
+    visual_set_index_by_name("camera_zero_id")
+    await task_schedule(run_visual_camera_zero_id)
+    ->END
+
+
+=== run_visual_camera_zero_id
+metadata: ``` yaml
+type: visual/camera_zero_id
+```
+    # Two landmarks that cannot be mistaken for each other, 20km apart.
+    _near = to_object(npc_spawn(0, 0, 0, "NEAR", "tsn", "starbase_command", "behav_station"))
+    ->END if _near is None
+    for _zi in range(7):
+        terrain_spawn(0 - 4500 + _zi * 1500, 0, 2600, f"n{_zi}", "#,ref", "plain_asteroid_6", "behav_asteroid")
+
+    _far = to_object(npc_spawn(20000, 0, 0, "FAR", "raider", "kralien_dreadnought", "behav_npcship"))
+    for _fi in range(7):
+        terrain_spawn(20000 - 4500 + _fi * 1500, 0, 2600, f"f{_fi}", "#,ref", "plain_asteroid_11", "behav_asteroid")
+
+    shared VISUAL_ZERO_NEAR = _near.id
+    task_schedule(visual_camera_zero_id_driver)
+
+    _expect = ~~[
+        "beat 1 asks for a camera at (0,800,-2500) looking at the origin, with NO object",
+        "if the starbase is framed, id 0 means the vector is a WORLD POSITION",
+        "beat 2 asks for (20000,800,-2500) looking at the far ship, still with no object",
+        "if the far ship is framed, world-space is confirmed - not a coincidence",
+        "empty sky instead = id 0 meant the assigned ship (parked far above the plane)",
+        "an unchanged default view = id 0 disables the scripted camera",
+    ]~~
+    visual_case("Camera id 0", _expect, subtitle="SPIKE - would let a shot name coordinates instead of spawning a post", notes="beat 1: asking for the NEAR landmark by absolute coordinate", data="landmarks at x=0 and x=20000; the console cambot is parked at y=100000", hold=18)
+
+    visual_expect("id0: both landmarks spawned", _near is not None and _far is not None)
+    ->END
+
+
+=== visual_camera_zero_id_driver
+    _gen = visual_generation()
+
+    # beat 1 - ask for the NEAR landmark by coordinate, with no object at all.
+    await delay_sim(5)
+    ->END if visual_generation() != _gen
+    visual_camera_world(0, 800, 0 - 2500, 0, 0, 0)
+    visual_case_note("beat 1 fired: dolly id 0, eye=(0,800,-2500), look=(0,0,0)")
+
+    # beat 2 - same again, 20km away. A world-space reading must follow it there.
+    await delay_sim(6)
+    ->END if visual_generation() != _gen
+    visual_camera_world(20000, 800, 0 - 2500, 20000, 0, 0)
+    visual_case_note("beat 2 fired: same call at x=20000 - does the view follow?")
+    ->END

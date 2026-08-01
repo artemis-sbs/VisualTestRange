@@ -150,10 +150,10 @@ def visual_renderer():
 # ---------------------------------------------------------------------------
 # Camera: pinned to an object with an offset, identical in engine and mock.
 # ---------------------------------------------------------------------------
-_CAM = {"dolly": 0, "eye": (0.0, 900.0, -2600.0), "target": 0, "look": (0.0, 0.0, 0.0), "seq": 0}
+_CAM = {"dolly": 0, "eye": (0.0, 900.0, -2600.0), "target": 0, "look": (0.0, 0.0, 0.0), "seq": 0, "pushed": 0, "mode": "none", "assign": True}
 
 
-def visual_camera(dolly_id, eye=(0.0, 900.0, -2600.0), target_id=None, look=(0.0, 0.0, 0.0)):
+def visual_camera(dolly_id, eye=(0.0, 900.0, -2600.0), target_id=None, look=(0.0, 0.0, 0.0), assign=True):
     """Pin the frame: camera at `dolly_id` + `eye`, looking at `target_id` + `look`.
 
     Both offsets are world-space, so the frame is reproducible run to run - which is the
@@ -175,11 +175,64 @@ def visual_camera(dolly_id, eye=(0.0, 900.0, -2600.0), target_id=None, look=(0.0
       the client assigned to whatever the camera rides, so the dolly cannot be terrain.
     """
     from sbs_utils.procedural.query import to_id
-    _CAM["dolly"] = to_id(dolly_id) or 0
+    # NEVER fall back to id 0. It is a sentinel whose meaning is not yet established (world
+    # position? the assigned ship? no camera at all?) - see visual_camera_zero_id - so an
+    # object that fails to resolve must be a loud no-op, not a camera pointed at a mystery.
+    dolly = to_id(dolly_id)
+    if not dolly:
+        log(f"visual: camera pin ignored - dolly {dolly_id!r} did not resolve", "visual")
+        print(f"VISUAL WARN camera pin ignored - dolly {dolly_id!r} did not resolve")
+        return
+    _CAM["mode"] = "object"
+    _CAM["assign"] = bool(assign)   # False = point WITHOUT assigning (the cut spike's control)
+    _CAM["dolly"] = dolly
     _CAM["eye"] = (float(eye[0]), float(eye[1]), float(eye[2]))
-    _CAM["target"] = (to_id(target_id) if target_id is not None else _CAM["dolly"]) or 0
+    _CAM["target"] = (to_id(target_id) if target_id is not None else dolly) or dolly
     _CAM["look"] = (float(look[0]), float(look[1]), float(look[2]))
     _CAM["seq"] += 1
+    _camera_push()
+
+
+def visual_camera_world(ex, ey, ez, lx, ly, lz):
+    """Pin the camera with dolly/target id 0 and the offsets as ABSOLUTE coordinates.
+
+    Exists to test what id 0 means (see visual_camera_zero_id). If the engine reads it as a
+    world position this is the most useful call in the camera API - a shot names coordinates
+    and needs no anchor object - and if it does not, this is the call that proves it.
+    """
+    _CAM["mode"] = "world"      # the ONLY deliberate use of id 0 in the range
+    _CAM["dolly"] = 0
+    _CAM["eye"] = (float(ex), float(ey), float(ez))
+    _CAM["target"] = 0
+    _CAM["look"] = (float(lx), float(ly), float(lz))
+    _CAM["seq"] += 1
+    _camera_push()
+
+
+def _camera_push():
+    """Send the pin to every console we know about, NOW.
+
+    The camera used to reach a client only when its console repainted (`on change
+    visual_camera_seq()` -> rebuild -> apply). That is enough for the FIRST pin of a specimen,
+    which is exactly why every STATIC specimen looked right in the engine while every one that
+    moves the camera afterwards did not. A camera is a per-client engine call, not a piece of
+    page layout; it should not wait on a GUI rebuild to be delivered.
+    """
+    n = 0
+    for cid in list(_CAMBOTS.keys()):
+        if visual_camera_apply(cid):
+            n += 1
+    _CAM["pushed"] = n
+
+
+def visual_camera_delivered():
+    """How many consoles the last pin actually reached.
+
+    Renderer-agnostic, so it is a real check in both: zero means the camera was set and went
+    nowhere, which is precisely the failure that made every dynamic specimen look broken in
+    the engine while passing headless. A specimen that MOVES its camera should assert this.
+    """
+    return _CAM["pushed"]
 
 
 def visual_camera_seq():
@@ -201,12 +254,54 @@ def visual_camera_apply(client_id):
     and would quietly break `fx_client_scope`, whose entire subject is what a client's
     assigned ship can see.
     """
-    if not _CAM["dolly"]:
+    # NOTE: id 0 is NOT "no camera" here - it is the case under test (visual_camera_zero_id).
+    # Only an unset pin should be skipped, so the sentinel is the sequence, not the id.
+    if _CAM["mode"] == "none":
         return False
     from sbs_utils.procedural.gui.cinematic import gui_cinematic_full_control
+    from sbs_utils.procedural.query import to_object
     from sbs_utils.vec import Vec3
-    gui_cinematic_full_control(client_id, _CAM["dolly"], Vec3(*_CAM["eye"]),
-                               _CAM["target"], Vec3(*_CAM["look"]))
+
+    dolly = _CAM["dolly"]
+    target = _CAM["target"]
+    eye = _CAM["eye"]
+    look = _CAM["look"]
+
+    # ENGINE CONSTRAINT: dolly and target must be the SAME object, or the frame is black.
+    # Confirmed with everything else held constant. Nearly every specimen in this range pins an
+    # anchor and looks at a subject - two objects - which is why the camera work here looked
+    # broken in ways that had nothing to do with what each specimen was testing.
+    #
+    # Re-express it: keep the SUBJECT, and turn the anchor's position into the lens offset.
+    # The shot is unchanged; only its spelling is.
+    if _CAM["mode"] == "object" and target and dolly != target:
+        _d = to_object(dolly)
+        _t = to_object(target)
+        if _d is not None and _t is not None:
+            eye = ((_d.pos.x + eye[0]) - (_t.pos.x + look[0]),
+                   (_d.pos.y + eye[1]) - (_t.pos.y + look[1]),
+                   (_d.pos.z + eye[2]) - (_t.pos.z + look[2]))
+            look = (0.0, 0.0, 0.0)
+        dolly = target
+
+    # ...and never sit exactly on the look-at point: a zero-length view vector has no
+    # direction, so the frame is black.
+    if dolly == target and eye == look:
+        eye = (eye[0], eye[1], eye[2] - 50.0)
+    # ASSIGN THE CLIENT TO THE DOLLY. Engine-observed: a camera change only takes when the
+    # console is assigned to the object the lens rides. Re-pointing alone left a black screen;
+    # so did moving the object the lens was already on. Assigning and then pointing worked.
+    #
+    # This reverses what I took from the Game Master - that assignment is the console's
+    # identity and the dolly is merely where the lens sits. GM does point at objects it is not
+    # assigned to, so something there is still unaccounted for; but on the evidence in front of
+    # us, the assignment is what makes a change take, and the range follows the evidence.
+    if _CAM["mode"] == "object" and dolly and _CAM.get("assign", True):
+        try:
+            FrameContext.context.sbs.assign_client_to_ship(client_id, dolly)
+        except Exception:
+            pass
+    gui_cinematic_full_control(client_id, dolly, Vec3(*eye), dolly, Vec3(*look))
     return True
 
 
@@ -242,31 +337,18 @@ def visual_client_assign(obj_id):
     return done
 
 
+def visual_client_assign_back():
+    """Put every console back on its own cambot - so a beat that tested reassignment does not
+    leave the next beat testing something else."""
+    n = 0
+    for cid in list(_CAMBOTS.keys()):
+        if visual_client_assign_one(cid, _CAMBOTS[cid]):
+            n += 1
+    return n
+
+
 def visual_cambots():
     return dict(_CAMBOTS)
-
-
-def visual_client_cambot(client_id):
-    """Give this console its own invisible cambot and assign the client to it, once.
-
-    The engine requires the assignment; the mock does not, which is exactly why forgetting it
-    would survive every headless run and only surface in an engine session.
-    """
-    from sbs_utils.procedural.query import to_object
-    from sbs_utils.procedural.inventory import get_inventory_value, set_inventory_value
-    existing = get_inventory_value(client_id, "visual_cambot", None)
-    if existing is not None and to_object(existing) is not None:
-        return existing
-    cam = visual_anchor(0, 0, 0, "")
-    if not cam:
-        return None
-    set_inventory_value(client_id, "visual_cambot", cam)
-    _CAMBOTS[client_id] = cam
-    try:
-        FrameContext.context.sbs.assign_client_to_ship(client_id, cam)
-    except Exception:
-        pass
-    return cam
 
 
 def visual_anchor(x, y, z, name=None):
@@ -291,6 +373,77 @@ def visual_anchor(x, y, z, name=None):
         return 0
     remove_role(cam, "__player__")   # rides the camera, but is not a player ship
     return to_id(cam)
+
+def visual_client_cambot(client_id):
+    """Spawn (or reuse) this console's invisible cambot. Does NOT assign the client.
+
+    Assignment is deliberately separate so it can be given its own tick: LM's Game Master
+    waits a full `delay_sim(1)` between spawning its cambot and assigning a client to it, and
+    only sets the view up afterwards. This console did all three inside one build, which is a
+    plausible cause of a camera that works sometimes. See visual_client_camera_setup.
+    """
+    from sbs_utils.procedural.query import to_object
+    from sbs_utils.procedural.inventory import get_inventory_value, set_inventory_value
+    existing = get_inventory_value(client_id, "visual_cambot", None)
+    if existing is not None and to_object(existing) is not None:
+        _CAMBOTS[client_id] = existing
+        return existing
+    # WHERE the cambot sits is not cosmetic: the console is ASSIGNED to it, and the engine
+    # scopes what a console receives around its assigned object - so a cambot parked in deep
+    # space is a console that gets culled away from its own scene. LM keeps its cambots in the
+    # area of interest (the GM pans its own on click). Parking one 100km up was mine, and it
+    # survived the mock only because the mock BROADCASTS terrain to every client and culls
+    # only the dynamic stream - so a terrain-heavy range looked fine with the console nowhere
+    # near the scene.
+    #
+    # Near the scenes, above the plane, and clear of the gravity wells this range spawns:
+    # 6708u from the hole at the origin (radius 1500), 11225u from the one at x=9000
+    # (radius 4000). An object at a well's exact centre has no direction to be pulled in, its
+    # position goes NaN, and the engine asserts.
+    cam = visual_anchor(CAMBOT_HOME[0], CAMBOT_HOME[1], CAMBOT_HOME[2], "")
+    if not cam:
+        return None
+    set_inventory_value(client_id, "visual_cambot", cam)
+    _CAMBOTS[client_id] = cam
+    return cam
+
+
+def visual_client_assign_one(client_id, cam_id):
+    """Assign one console to its cambot. Its own step, one tick after the spawn."""
+    from sbs_utils.procedural.query import to_id
+    oid = to_id(cam_id)
+    if not oid:
+        return False
+    try:
+        FrameContext.context.sbs.assign_client_to_ship(client_id, oid)
+    except Exception:
+        return False
+    return True
+
+
+_SETUP_STARTED = set()
+
+# Which clients have a console. Survives a scene reset - the CAMBOTS do not (sim_create wipes
+# every object), so after each teardown the stage rebuilds one per console from this list.
+_CONSOLE_CLIENTS = []
+
+# Where a cambot lives when nothing is borrowing it: near the scenes, above the plane, clear
+# of the gravity wells this range spawns.
+CAMBOT_HOME = (0.0, 3000.0, -6000.0)
+
+
+def visual_console_clients():
+    return list(_CONSOLE_CLIENTS)
+
+
+def visual_camera_needs_setup(client_id):
+    """True once per console - the stage uses it to start the setup task exactly once."""
+    if client_id not in _CONSOLE_CLIENTS:
+        _CONSOLE_CLIENTS.append(client_id)
+    if client_id in _SETUP_STARTED:
+        return False
+    _SETUP_STARTED.add(client_id)
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -494,32 +647,56 @@ def visual_drivers_stop():
 def visual_spin(obj_id, seconds_per_turn=12.0, radius=8000.0):
     """Yaw an object in place, forever, without moving it.
 
-    Steers by DESTINATION rather than by writing a heading: `target_pos_*` is the documented
-    navigation lever and both renderers honor it, where a directly-written orientation is not
-    reliably settable from script. Throttle stays 0, so the ship turns without translating.
+    Uses `engine_object.steer_yaw` - a rotation RATE the engine applies itself, with nothing
+    to drive per tick. It is how LM tumbles its asteroids (gamemaster/move_to_lib.py).
+
+    It previously circled a `target_pos` around the object, which is how the MOCK's steering
+    works: its physics reads target_pos and turns toward it. The engine does not steer an NPC
+    from that alone, so the subject sat perfectly still - and a motionless ship reads exactly
+    like a world-space camera, so the Q1 spike would have returned a confident wrong answer.
+    `radius` is kept so callers do not break, and is unused.
     """
-    import math
     from sbs_utils.procedural.query import to_object
-    from sbs_utils.tickdispatcher import TickDispatcher
     o = to_object(obj_id)
     if o is None:
         return None
     o.data_set.set("throttle", 0.0, 0)
-    base = (o.pos.x, o.pos.y, o.pos.z)
-    state = {"t": 0.0}
+    # rad/s for one full turn in `seconds_per_turn`. This used to carry a fudge factor of
+    # 0.35 that made a "14 second turn" take 251 seconds - slow enough to look like nothing
+    # happening unless you happened to watch for a minute. Compute it, do not guess it.
+    import math
+    o.engine_object.steer_yaw = 2.0 * math.pi / max(seconds_per_turn, 0.1)
+    return obj_id
 
-    def _step(task):
-        state["t"] += 0.2
-        a = (state["t"] / max(seconds_per_turn, 0.1)) * 2.0 * math.pi
-        oo = to_object(obj_id)
-        if oo is None:
-            task.stop()
-            return
-        oo.data_set.set("target_pos_x", base[0] + math.sin(a) * radius, 0)
-        oo.data_set.set("target_pos_y", base[1], 0)
-        oo.data_set.set("target_pos_z", base[2] + math.cos(a) * radius, 0)
 
-    return _register_driver(TickDispatcher.do_interval(_step, 0.2))
+def visual_heading(obj_id):
+    """Compass heading in degrees from an object's forward vector."""
+    import math
+    from sbs_utils.procedural.query import to_object
+    o = to_object(obj_id)
+    if o is None:
+        return 0.0
+    f = o.engine_object.forward_vector()
+    return math.degrees(math.atan2(f.x, f.z))
+
+
+def visual_rate_text(h0, h1, seconds):
+    """'25.7 deg/s - one turn every 14.0s' from two headings and the gap between them.
+
+    The units of steer_yaw are not documented anywhere, so the honest thing is to MEASURE
+    what the renderer actually did and put the number on the card. A spin that reads as
+    "nothing is happening" then says so in degrees instead of being argued about.
+    """
+    d = (h1 - h0 + 540.0) % 360.0 - 180.0
+    rate = abs(d) / max(seconds, 0.001)
+    if rate < 0.05:
+        return "measured 0.0 deg/s - NOT ROTATING"
+    return f"measured {rate:.1f} deg/s - one turn every {360.0 / rate:.1f}s"
+
+
+def visual_rate_value(h0, h1, seconds):
+    d = (h1 - h0 + 540.0) % 360.0 - 180.0
+    return abs(d) / max(seconds, 0.001)
 
 
 def visual_drive_anchor(anchor_id, to_xyz, seconds):
@@ -557,6 +734,29 @@ def visual_drive_anchor(anchor_id, to_xyz, seconds):
     return _register_driver(TickDispatcher.do_interval(_step, step))
 
 
+def visual_console_restore():
+    """Put every console back the way a specimen found it: cambot home, client assigned to it.
+
+    A specimen is allowed to borrow console state - the cut spike deliberately reassigns the
+    client and teleports the cambot to see what a cut does. Before this range ran on ONE sim
+    that was self-correcting, because the cambots were rebuilt each time. Now they persist, so
+    a borrowed cambot stays borrowed and the next specimen runs with its console assigned to
+    somebody else's ship, parked in the middle of a scene it has nothing to do with.
+
+    Restoring here rather than per-specimen means a specimen cannot forget, and a specimen
+    that CRASHES mid-sequence cannot poison the rest of the run.
+    """
+    from sbs_utils.procedural.query import to_object
+    from sbs_utils.vec import Vec3
+    for cid in list(_CAMBOTS.keys()):
+        cam_id = _CAMBOTS[cid]
+        o = to_object(cam_id)
+        if o is None:
+            continue
+        o.pos = Vec3(*CAMBOT_HOME)
+        visual_client_assign_one(cid, cam_id)
+
+
 def visual_reset_objects():
     """Delete every space object from the previous specimen. Sides survive - they are the
     diplomacy baseline registered once at start, not actors.
@@ -572,27 +772,42 @@ def visual_reset_objects():
     from sbs_utils.procedural.space_objects import delete_object
     from sbs_utils.agent import Agent
     visual_drivers_stop()   # FIRST: a surviving driver would write to the objects being deleted
+    visual_console_restore()   # ...and a specimen must not leave a console borrowed
     _GEN["n"] += 1          # ...and any MAST task still awaiting must see that it is stale
+    keep = set(_CAMBOTS.values())
     for _id in list(Agent.all.keys()):
         if not is_space_object_id(_id) or is_client_id(_id):
             continue
         a = Agent.all.get(_id)
         if a is not None and a.has_role("__side__"):
             continue
+        if _id in keep:
+            continue        # a console's cambot is INFRASTRUCTURE, not scene
         delete_object(_id)
     _CARD["expect"] = []
     _CARD["title"] = ""
     _CARD["data"] = ""
     _WIDGETS.clear()
-    _CAMBOTS.clear()    # the cambots are space objects too; the console remakes one on repaint
+    # No pin between specimens. This used to leave dolly 0 live, so any console repaint during
+    # a transition sent a camera aimed at the sentinel - which, depending on what 0 means,
+    # jumps to the origin, to the parked cambot, or disables the view. A blank frame at every
+    # switch would look exactly like the reset bug it is not.
+    _CAM["mode"] = "none"
     _CAM["dolly"] = 0
 
 
 def visual_reset_sim():
     """Blank the sim itself (nav points, projectiles, contact pairs, spatial hash).
 
-    The sim handle is stale for the rest of the frame afterwards, so the caller must give it
-    a tick before anything spawns into it.
+    NOT USED between specimens, deliberately. This range runs on ONE sim for the whole
+    session: sim_create() destroys every object including each console's cambot, which left
+    the client assigned to a deleted object and forced a rebuild - and the rebuild needs a
+    tick between assigning and pointing the camera, so the race came back at every single
+    specimen switch. Deleting the scene's own objects is enough, and console infrastructure
+    then simply never goes away.
+
+    Kept for a caller who genuinely wants a blank sim. The sim handle is stale for the rest
+    of the frame afterwards, so give it a tick before anything spawns into it.
     """
     from sbs_utils.procedural.cosmos import sim_create, sim_resume
     sim_create()

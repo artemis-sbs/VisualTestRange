@@ -38,6 +38,7 @@ import maps/visual_button_chrome.mast
 import maps/visual_camera_offsets.mast
 import maps/visual_camera_cut.mast
 import maps/visual_camera_rate.mast
+import maps/visual_camera_zero_id.mast
 
 
 # A tool mission: no connect dialog.
@@ -73,6 +74,11 @@ shared VISUAL_HOLD_SECONDS = 6
     # A tick late on purpose: start_server does its OWN gui_reroute_clients(game_started_console)
     # immediately AFTER emitting game_started, so rerouting inline would just be overwritten.
     await delay_sim(1)
+    # Both get the SAME stage. Every camera console that works in LM - Game Master, Manual
+    # Beams - runs on a CLIENT, and this range only ever ran its camera on client 0, which is
+    # an uncontrolled variable sitting under every camera problem here. One screen for both
+    # also removes a server/client divergence, which is its own source of "works there, not
+    # here".
     gui_reroute_server("visual_stage")
-    gui_reroute_clients("visual_viewport")
+    gui_reroute_clients("visual_stage")
     ->END

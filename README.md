@@ -143,6 +143,28 @@ Harness (`maps/visual_harness.py`):
   child update inside an absolutely-positioned region ghosts in the engine, which is exactly
   the class of bug this range exists to catch. It must not be the range's own bug.
 
+## An engine trap: gravity and NaN
+
+An object sitting at a gravity source's **centre** has no direction left to be pulled in. Its
+position goes NaN and the engine asserts outright:
+
+```
+Assertion failed!  Expression: !isnan(so->pos.x)
+File: Simulation.cpp  Line: 668
+```
+
+The range hit this twice in one specimen, both self-inflicted and both easy to repeat:
+
+- the console's invisible **cambot spawned at the world origin**, which is exactly where
+  `visual_blackhole` puts hole A. It is now parked far above the plane — its position never
+  affects the picture, since the lens rides the specimen's own anchor.
+- the scale-reference ship sat **exactly on** hole A's gravity radius, was dragged in, and
+  arrived at the centre. It now sits in the gap between the two wells.
+
+The rule for a specimen: **do not place anything inside a gravity well you do not intend to
+lose.** LM's lethal-proximity watch, which destroys craft near a hole before they reach the
+centre, lives in an addon this range does not load — so here they fall all the way in.
+
 ## Two MAST traps this range walked into
 
 Both cost real time here, so they are written down rather than rediscovered.
