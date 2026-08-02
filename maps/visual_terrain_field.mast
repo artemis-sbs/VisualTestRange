@@ -44,7 +44,7 @@ type: visual/terrain_field
             _r.data_set.set("local_scale_z_coeff", _coeffs[_si], 0)
 
     _anchor = visual_anchor(0, 0, 1500)
-    visual_camera(_anchor, eye=(0, 3000, 0 - 6000))
+    visual_camera(_anchor, lens=(0, 3000, 0 - 6000))
 
     _expect = ~~[
         "front row: eleven DIFFERENT rocks - crystals and plain, not eleven of one shape",

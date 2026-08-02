@@ -57,7 +57,7 @@ type: visual/camera_offsets
     # Framed from an ANCHOR this pass, not from a subject: the question right now is which of
     # them is visible at all, and that must not depend on the camera riding one of them.
     _anchor = visual_anchor(0, 0, 0)
-    visual_camera(_anchor, eye=(0, 1200, 0 - 4200))
+    visual_camera(_anchor, lens=(0, 1200, 0 - 4200))
 
     _expect = ~~[
         "LEFT: a cruiser spawned as an NPC. RIGHT: the same hull spawned as TERRAIN",

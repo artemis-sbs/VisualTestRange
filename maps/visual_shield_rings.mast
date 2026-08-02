@@ -41,7 +41,7 @@ type: visual/shield_rings
         _split.data_set.set("shield_val", 0, 1)
 
     _anchor = visual_anchor(0, 0, 0)
-    visual_camera(_anchor, eye=(0, 1500, 0 - 2600))
+    visual_camera(_anchor, lens=(0, 1500, 0 - 2600))
 
     _expect = ~~[
         "five ships, each ringed by a split fore/aft arc with a gap at each side",

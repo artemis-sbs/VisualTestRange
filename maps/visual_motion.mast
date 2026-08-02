@@ -42,7 +42,7 @@ type: visual/motion
     target_pos(_play.id, _to, 0, _lane, throttle=1.0)
 
     _anchor = visual_anchor(0, 0, 0)
-    visual_camera(_anchor, eye=(0, 5200, 0 - 7000))
+    visual_camera(_anchor, lens=(0, 5200, 0 - 7000))
 
     _expect = ~~[
         "three ships crossing left to right, each in its own lane",

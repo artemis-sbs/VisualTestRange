@@ -42,7 +42,7 @@ type: visual/camera_cut
     shared VISUAL_CUT_B = visual_anchor(2600, 0, 1800, "camB")
     shared VISUAL_CUT_SUBJECT = _subject.id
 
-    visual_camera(VISUAL_CUT_A, eye=(0, 400, 0), target_id=_subject.id)
+    visual_camera(VISUAL_CUT_A, lens=(0, 400, 0), target_id=_subject.id)
     task_schedule(visual_camera_cut_driver)
 
     _expect = ~~[
@@ -66,7 +66,7 @@ type: visual/camera_cut
     # --- beat 1: POINT ONLY --------------------------------------------------------
     await delay_sim(4)
     ->END if visual_generation() != _gen
-    visual_camera(VISUAL_CUT_B, eye=(0, 400, 0), target_id=VISUAL_CUT_SUBJECT, assign=False)
+    visual_camera(VISUAL_CUT_B, lens=(0, 400, 0), target_id=VISUAL_CUT_SUBJECT, assign=False)
     visual_expect("cut: beat 1 reached a console", visual_camera_delivered() > 0, f"{visual_camera_delivered()} consoles")
     visual_case_note("beat 1: POINTED at camB. Client NOT reassigned.")
 
@@ -78,7 +78,7 @@ type: visual/camera_cut
     ->END if visual_generation() != _gen
     visual_client_assign(VISUAL_CUT_A)
     await delay_sim(0)
-    visual_camera(VISUAL_CUT_A, eye=(0, 400, 0), target_id=VISUAL_CUT_SUBJECT)
+    visual_camera(VISUAL_CUT_A, lens=(0, 400, 0), target_id=VISUAL_CUT_SUBJECT)
     visual_case_note("beat 2: ASSIGNED to camA, then POINTED at it")
 
     # --- beat 3: MOVE THE OBJECT THE LENS IS ALREADY ON ----------------------------
@@ -90,7 +90,7 @@ type: visual/camera_cut
     await delay_sim(0)
     _cams = visual_cambots()
     for _cid in _cams:
-        visual_camera(_cams[_cid], eye=(0, 300, 0 - 1500), target_id=VISUAL_CUT_SUBJECT)
+        visual_camera(_cams[_cid], lens=(0, 300, 0 - 1500), target_id=VISUAL_CUT_SUBJECT)
     await delay_sim(1)
     visual_cambot_move(0 - 3000, 1200, 0 - 3000)
     visual_case_note("beat 3: MOVED the cambot the lens is already riding")
@@ -100,7 +100,7 @@ type: visual/camera_cut
     ->END if visual_generation() != _gen
     visual_client_assign(VISUAL_CUT_B)
     await delay_sim(0)
-    visual_camera(VISUAL_CUT_B, eye=(0, 400, 0), target_id=VISUAL_CUT_SUBJECT)
+    visual_camera(VISUAL_CUT_B, lens=(0, 400, 0), target_id=VISUAL_CUT_SUBJECT)
     await delay_sim(2)
     ->END if visual_generation() != _gen
     delete_object(VISUAL_CUT_B)

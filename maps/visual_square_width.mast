@@ -31,7 +31,7 @@ type: visual/square_width
     # background is where edge errors actually show.
     _sq_subject = to_object(npc_spawn(0, 0, 0, "Backdrop", "tsn", "starbase_command", "behav_station"))
     _sq_anchor = visual_anchor(0, 0, 0)
-    visual_camera(_sq_anchor, eye=(0, 1200, 0 - 3800))
+    visual_camera(_sq_anchor, lens=(0, 1200, 0 - 3800))
 
     _sq_face = random_terran()
     _sq_image = ""

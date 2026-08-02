@@ -54,7 +54,7 @@ type: visual/camera_rate
 
     # PASS 1 - the naive mover: an anchor whose position we write on a tick.
     _a = visual_anchor(0 - 4500, 900, 0 - 3000, "rateA")
-    visual_camera(_a, eye=(0, 0, 0), target_id=VISUAL_RATE_SUBJECT)
+    visual_camera(_a, lens=(0, 0, 0), target_id=VISUAL_RATE_SUBJECT)
     _dest = ~~[4500, 900, -3000]~~
     visual_drive_anchor(_a, _dest, 8)
     await delay_sim(10)
@@ -76,5 +76,5 @@ type: visual/camera_rate
     # Put the rig on the subject SIDE of the ship and above it: the hull is then behind the
     # lens, out of frame, and the camera still rides its motion exactly, which is the only
     # thing this pass is measuring.
-    visual_camera(_ship.id, eye=(0, 250, 400), target_id=VISUAL_RATE_SUBJECT)
+    visual_camera(_ship.id, lens=(0, 250, 400), target_id=VISUAL_RATE_SUBJECT)
     ->END

@@ -38,7 +38,7 @@ type: visual/scale_ladder
     _world = visual_planet_spawn(0, 0, 9000, radius=1200, name="Worldlet")
 
     _anchor = visual_anchor(0, 0, 0)
-    visual_camera(_anchor, eye=(0, 900, 0 - 6500))
+    visual_camera(_anchor, lens=(0, 900, 0 - 6500))
 
     _expect = ~~[
         "seven subjects, left to right: wreck, rock, fighter, cruiser, battleship, starbase",

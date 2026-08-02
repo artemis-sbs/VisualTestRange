@@ -43,7 +43,7 @@ type: visual/lower_third_portrait
     for _ltp_i in range(9):
         terrain_spawn(0 - 6000 + _ltp_i * 1500, 0, 3000, f"ltpref{_ltp_i}", "#,ref", "plain_asteroid_9", "behav_asteroid")
     _ltp_anchor = visual_anchor(0, 0, 0)
-    visual_camera(_ltp_anchor, eye=(0, 1500, 0 - 4200))
+    visual_camera(_ltp_anchor, lens=(0, 1500, 0 - 4200))
 
     _ltp_face_a = random_terran()
     _ltp_face_b = random_terran()

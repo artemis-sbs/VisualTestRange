@@ -42,7 +42,7 @@ type: visual/fx_client_scope
     # camera now assigns the console to whatever it rides, so an anchor here would reassign
     # the console away from the very ship whose culling this specimen exists to observe -
     # the specimen would quietly be testing the anchor's scope instead.
-    visual_camera(_pa.id, eye=(0, 900, 0 - 2200), target_id=_ea.id)
+    visual_camera(_pa.id, lens=(0, 900, 0 - 2200), target_id=_ea.id)
 
     _expect = ~~[
         "server tab: both fights are streamed (the GM view is never culled)",

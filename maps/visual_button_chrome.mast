@@ -33,7 +33,7 @@ type: visual/button_chrome
     for _bi in range(9):
         terrain_spawn(0 - 6000 + _bi * 1500, 0, 3000, f"ref{_bi}", "#,ref", "plain_asteroid_9", "behav_asteroid")
     _anchor = visual_anchor(0, 0, 0)
-    visual_camera(_anchor, eye=(0, 1500, 0 - 4200))
+    visual_camera(_anchor, lens=(0, 1500, 0 - 4200))
 
     # First row is the control: a plain gui_button, whatever the engine gives it. The rest set
     # background_color, which routes through colorbutton + text.

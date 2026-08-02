@@ -39,7 +39,7 @@ type: visual/planet
     _p4 = visual_planet_spawn(_gap * 1.5, 0, 0, radius=_r, cloud_exponent=0.5, cloud_strength=6.0, name="Clouds on")
 
     _anchor = visual_anchor(0, 0, 0)
-    visual_camera(_anchor, eye=(0, 1800, 0 - 11000))
+    visual_camera(_anchor, lens=(0, 1800, 0 - 11000))
 
     _expect = ~~[
         "four banded spheres in a row, all the same size",

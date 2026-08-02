@@ -4,7 +4,7 @@ A specimen is a label tagged `metadata: type: visual/<name>`. It does three thin
 
     visual_case("Black hole", ["what you should see", ...], notes=..., data=...)
     _anchor = visual_anchor(0, 0, 0)              # invisible camera post
-    visual_camera(_anchor, eye=(0, 900, -2600))   # pin the frame
+    visual_camera(_anchor, lens=(0, 900, -2600))   # pin the frame
 
 and then spawns its subject. The console renders the card over the 3dview and applies
 the camera for its OWN client, so a specimen never needs to know client ids.
@@ -183,11 +183,11 @@ def visual_renderer():
 # ---------------------------------------------------------------------------
 # Camera: pinned to an object with an offset, identical in engine and mock.
 # ---------------------------------------------------------------------------
-_CAM = {"dolly": 0, "eye": (0.0, 900.0, -2600.0), "target": 0, "look": (0.0, 0.0, 0.0), "seq": 0, "pushed": 0, "mode": "none", "assign": True}
+_CAM = {"dolly": 0, "lens": (0.0, 900.0, -2600.0), "target": 0, "look": (0.0, 0.0, 0.0), "seq": 0, "pushed": 0, "mode": "none", "assign": True}
 
 
-def visual_camera(dolly_id, eye=(0.0, 900.0, -2600.0), target_id=None, look=(0.0, 0.0, 0.0), assign=True):
-    """Pin the frame: camera at `dolly_id` + `eye`, looking at `target_id` + `look`.
+def visual_camera(dolly_id, lens=(0.0, 900.0, -2600.0), target_id=None, look=(0.0, 0.0, 0.0), assign=True):
+    """Pin the frame: camera at `dolly_id` + `lens`, looking at `target_id` + `look`.
 
     Both offsets are world-space, so the frame is reproducible run to run - which is the
     whole point: two runs of a specimen must be comparable, and engine vs mock must be
@@ -219,7 +219,7 @@ def visual_camera(dolly_id, eye=(0.0, 900.0, -2600.0), target_id=None, look=(0.0
     _CAM["mode"] = "object"
     _CAM["assign"] = bool(assign)   # False = point WITHOUT assigning (the cut spike's control)
     _CAM["dolly"] = dolly
-    _CAM["eye"] = (float(eye[0]), float(eye[1]), float(eye[2]))
+    _CAM["lens"] = (float(lens[0]), float(lens[1]), float(lens[2]))
     _CAM["target"] = (to_id(target_id) if target_id is not None else dolly) or dolly
     _CAM["look"] = (float(look[0]), float(look[1]), float(look[2]))
     _CAM["seq"] += 1
@@ -235,7 +235,7 @@ def visual_camera_world(ex, ey, ez, lx, ly, lz):
     """
     _CAM["mode"] = "world"      # the ONLY deliberate use of id 0 in the range
     _CAM["dolly"] = 0
-    _CAM["eye"] = (float(ex), float(ey), float(ez))
+    _CAM["lens"] = (float(ex), float(ey), float(ez))
     _CAM["target"] = 0
     _CAM["look"] = (float(lx), float(ly), float(lz))
     _CAM["seq"] += 1
@@ -297,7 +297,7 @@ def visual_camera_apply(client_id):
 
     dolly = _CAM["dolly"]
     target = _CAM["target"]
-    eye = _CAM["eye"]
+    lens = _CAM["lens"]
     look = _CAM["look"]
 
     # ENGINE CONSTRAINT: dolly and target must be the SAME object, or the frame is black.
@@ -311,16 +311,16 @@ def visual_camera_apply(client_id):
         _d = to_object(dolly)
         _t = to_object(target)
         if _d is not None and _t is not None:
-            eye = ((_d.pos.x + eye[0]) - (_t.pos.x + look[0]),
-                   (_d.pos.y + eye[1]) - (_t.pos.y + look[1]),
-                   (_d.pos.z + eye[2]) - (_t.pos.z + look[2]))
+            lens = ((_d.pos.x + lens[0]) - (_t.pos.x + look[0]),
+                   (_d.pos.y + lens[1]) - (_t.pos.y + look[1]),
+                   (_d.pos.z + lens[2]) - (_t.pos.z + look[2]))
             look = (0.0, 0.0, 0.0)
         dolly = target
 
     # ...and never sit exactly on the look-at point: a zero-length view vector has no
     # direction, so the frame is black.
-    if dolly == target and eye == look:
-        eye = (eye[0], eye[1], eye[2] - 50.0)
+    if dolly == target and lens == look:
+        lens = (lens[0], lens[1], lens[2] - 50.0)
     # ASSIGN THE CLIENT TO THE DOLLY. Engine-observed: a camera change only takes when the
     # console is assigned to the object the lens rides. Re-pointing alone left a black screen;
     # so did moving the object the lens was already on. Assigning and then pointing worked.
@@ -334,7 +334,7 @@ def visual_camera_apply(client_id):
             FrameContext.context.sbs.assign_client_to_ship(client_id, dolly)
         except Exception:
             pass
-    gui_cinematic_full_control(client_id, dolly, Vec3(*eye), dolly, Vec3(*look))
+    gui_cinematic_full_control(client_id, dolly, Vec3(*lens), dolly, Vec3(*look))
     return True
 
 

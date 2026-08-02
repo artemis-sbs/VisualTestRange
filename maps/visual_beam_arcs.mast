@@ -44,7 +44,7 @@ type: visual/beam_arcs
     target(_t3.id, _s3.id, False, 0.0)
 
     _anchor = visual_anchor(0, 0, 0)
-    visual_camera(_anchor, eye=(0, 7000, 0 - 7000))
+    visual_camera(_anchor, lens=(0, 7000, 0 - 7000))
 
     _expect = ~~[
         "left pair (dead ahead): beams reach the target",

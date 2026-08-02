@@ -19,8 +19,8 @@
 # is parked at y=100000, far from both, so an "assigned ship" reading shows empty space and
 # cannot be confused with either landmark.
 #
-#   beat 1  dolly=0 eye=(0,800,-2500) look at (0,0,0)         -> starbase framed = WORLD SPACE
-#   beat 2  dolly=0 eye=(20000,800,-2500) look at (20000,0,0) -> the FAR landmark = WORLD SPACE
+#   beat 1  dolly=0 lens=(0,800,-2500) look at (0,0,0)         -> starbase framed = WORLD SPACE
+#   beat 2  dolly=0 lens=(20000,800,-2500) look at (20000,0,0) -> the FAR landmark = WORLD SPACE
 #   either beat showing empty sky      -> ASSIGNED SHIP (the parked cambot)
 #   either beat showing the default forward view, unchanged   -> NEUTRALISED
 
@@ -69,7 +69,7 @@ type: visual/camera_zero_id
     await delay_sim(5)
     ->END if visual_generation() != _gen
     visual_camera_world(0, 800, 0 - 2500, 0, 0, 0)
-    visual_case_note("beat 1 fired: dolly id 0, eye=(0,800,-2500), look=(0,0,0)")
+    visual_case_note("beat 1 fired: dolly id 0, lens=(0,800,-2500), look=(0,0,0)")
 
     # beat 2 - same again, 20km away. A world-space reading must follow it there.
     await delay_sim(6)

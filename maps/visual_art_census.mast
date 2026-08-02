@@ -40,7 +40,7 @@ type: visual/art_census
             _made += 1
 
     _anchor = visual_anchor(0, 0, 0)
-    visual_camera(_anchor, eye=(0, _rows * _gap * 0.8, 0 - _rows * _gap * 0.9))
+    visual_camera(_anchor, lens=(0, _rows * _gap * 0.8, 0 - _rows * _gap * 0.9))
 
     _expect = ~~[
         "a grid of DIFFERENT hulls, stations, rocks and props",

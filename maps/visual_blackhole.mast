@@ -38,7 +38,7 @@ type: visual/blackhole
     _ref = npc_spawn(3200, 0, 0, "Ruler", "tsn", "tsn_light_cruiser", "behav_npcship")
 
     _anchor = visual_anchor(4500, 0, 0)
-    visual_camera(_anchor, eye=(0, 6000, 0 - 9000))
+    visual_camera(_anchor, lens=(0, 6000, 0 - 9000))
 
     _expect = ~~[
         "TWO dark discs, each ringed by a glow lying flat in the plane",

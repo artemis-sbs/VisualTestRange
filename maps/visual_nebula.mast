@@ -58,7 +58,7 @@ type: visual/nebula
             _n2.data_set.set("emission_blue", 0.85)
 
     _anchor = visual_anchor(0, 0, 3500)
-    visual_camera(_anchor, eye=(0, 4000, 0 - 13000))
+    visual_camera(_anchor, lens=(0, 4000, 0 - 13000))
 
     _expect = ~~[
         "front row: five clouds in five colors, each with its OWN internal shape",
