@@ -128,9 +128,11 @@ type: visual/lower_third_portrait
     # (Writing this as promise_any(reply, delay_sim(25)) is what exposed the bug that
     # `seconds` used to dismiss the buttons and leave the promise pending forever.)
     visual_case_note("REPLY BEAT - press Fire or Hold, or wait 25s and it moves on")
-    # AWAIT THE CALL, not a variable holding the promise: MAST's await takes a call
-    # form, so `p = f()` then `await p` does not compile ("Unrecognized syntax").
-    _ltp_res = await overlay_lower_third_portrait("Harkin", "Do we fire, or hold station?", face=_ltp_face_a, align="left", buttons=["Fire", "Hold"], on_reply="visual_reply", seconds=25)
+    # Holding the promise in a variable and awaiting it is fine. The one form that does
+    # NOT compile is a BARE `await p` with nothing assigned - assign it (`r = await p`)
+    # or await a call. A bare await of a variable is "Unrecognized syntax".
+    _ltp_reply = overlay_lower_third_portrait("Harkin", "Do we fire, or hold station?", face=_ltp_face_a, align="left", buttons=["Fire", "Hold"], on_reply="visual_reply", seconds=25)
+    _ltp_res = await _ltp_reply
 
     _ltp_answer = "nobody pressed - timed out"
     if _ltp_res.data is not None:
@@ -139,7 +141,8 @@ type: visual/lower_third_portrait
 
     # Right-aligned, so the reply row is checked on BOTH sides: the buttons should hug the
     # same edge as the portrait, not stay where the left-hand beat put them.
-    _ltp_res2 = await overlay_lower_third_portrait("Reyes", "Your call, Captain.", face=_ltp_face_b, align="right", buttons=["Acknowledge"], seconds=20)
+    _ltp_reply2 = overlay_lower_third_portrait("Reyes", "Your call, Captain.", face=_ltp_face_b, align="right", buttons=["Acknowledge"], seconds=20)
+    _ltp_res2 = await _ltp_reply2
 
     # Clear BOTH slots. The strip is sticky - without this it stays on screen into the next
     # specimen, which is a range reporting someone else's furniture as its own.
