@@ -1,23 +1,29 @@
-# SPECIMEN: the lower third that carries ONE face, on either side.
+# SPECIMEN: the lower third that carries ONE square visual, on either side.
 #
-# CINEMATIC_PLAN Phase 5. A conversation is NOT two portraits on screen at once - it is this
-# one strip shown repeatedly with the face ALTERNATING sides. One face keeps the strip's width
-# for the line instead of spending it on someone who is not talking, and it still reads for a
-# monologue or a three-hander, which a fixed two-face layout does not.
+# CINEMATIC_PLAN Phase 5/5b. A conversation is NOT two portraits on screen at once - it is this
+# one strip shown repeatedly with the visual ALTERNATING sides. One visual keeps the strip's
+# width for the line instead of spending it on someone who is not talking, and it still reads
+# for a monologue or a three-hander, which a fixed two-face layout does not.
+#
+# The visual is always laid out SQUARE (`col-width: square`), and that requirement is the
+# design: it is what makes a face, a ship, an icon and an image interchangeable without the
+# strip, the gutter or the room left for the line moving at all. This specimen shows all four
+# so that claim can be checked by eye rather than asserted.
 #
 # What only an eye can settle:
-#   - does the alternation actually read as a back-and-forth, or just as a jumping portrait?
-#   - is the strip the right HEIGHT - the face is a square sized from it, so the row height is
-#     what decides how big the portrait reads and how much is left for the line;
-#   - is the gutter between face and text the right thickness?
-#   - does the strip hold up over a LIVE 3D view, which is where it will always live?
+#   - does the alternation read as a back-and-forth, or just as a jumping portrait?
+#   - is the strip the right HEIGHT - the visual is a square sized from it, so the row height
+#     is what decides how big it reads and how much is left for the line;
+#   - is the gutter between visual and text the right thickness?
+#   - does a SHIP read at that size? It is a live 3D render, and it may be a smudge;
+#   - does the image letterbox cleanly inside the square rather than distorting?
 #
-# The last two beats are deliberately awkward: a long line (so the cycling split is judged
-# against the REDUCED width, not the full strip) and a speaker with no face (so a run of beats
-# is checked for sideways jump when the portrait column is empty).
+# Three beats are deliberately awkward: a long line (so the cycling split is judged against the
+# REDUCED width), a speaker with no visual at all (so the reserved column is checked for
+# sideways jump), and a wide image (so aspect handling is visible).
 
 @map/visual_lower_third_portrait "Visual: lower third portrait"
-" One face, left or right, alternating - the conversation lower third over a live view.
+" One square visual - face, ship, icon or image - left or right, over a live view.
     visual_set_index_by_name("lower_third_portrait")
     await task_schedule(run_visual_lower_third_portrait)
     ->END
@@ -37,45 +43,70 @@ type: visual/lower_third_portrait
     _ltp_face_a = random_terran()
     _ltp_face_b = random_terran()
 
-    # name, align, line. Two speakers trading the strip, then the two awkward cases.
+    # A real wide image if the shared pack is here; otherwise that beat falls back to the empty
+    # column, which is itself worth seeing.
+    _ltp_image = ""
+    if media_shared_exists("artemis_home_page"):
+        _ltp_image = media_shared("artemis_home_page")
+
+    # name, align, line, visual. Two speakers trading the strip, then the awkward cases, then
+    # the other three sources at the same row height for comparison.
     _ltp_beats = ~~[
-        ["Harkin", "left",  "Phoenix, we have movement on the far side of the belt."],
-        ["Reyes",  "right", "Confirmed - two contacts running dark, holding formation."],
-        ["Harkin", "left",  "Hold station and keep the belt between us until they commit to a heading; I am not giving away our position for a pair of contacts that may well be freighters."],
-        ["Reyes",  "right", "Understood. Holding."],
-        ["",       "left",  "This beat has NO face - the column should stay reserved, not jump."],
+        ["Harkin", "left",  "Phoenix, we have movement on the far side of the belt.", "face_a"],
+        ["Reyes",  "right", "Confirmed - two contacts running dark, holding formation.", "face_b"],
+        ["Harkin", "left",  "Hold station and keep the belt between us until they commit to a heading; I am not giving away our position for a pair of contacts that may well be freighters.", "face_a"],
+        ["Reyes",  "right", "Understood. Holding.", "face_b"],
+        ["",       "left",  "This beat has NO visual - the column should stay reserved, not jump.", ""],
+        ["Phoenix", "right", "A SHIP in the square: a live 3D render at the same size as a face.", "ship"],
+        ["Objective", "left", "An ICON in the square: already square, so it should not shift a thing.", "icon"],
+        ["Archive", "right", "An IMAGE in the square: wide source, so it should letterbox, not stretch.", "image"],
     ]~~
 
     _ltp_expect = ~~[
-        "one face at a time - never two portraits on the strip at once",
-        "the face swaps left/right between speakers, and that alternation reads as a conversation",
-        "the name and the line sit BESIDE the face and justify toward it, not away from it",
-        "the face is large enough to recognise and the line is still comfortable beside it",
+        "one visual at a time - never two portraits on the strip at once",
+        "it swaps left/right between speakers, and that alternation reads as a conversation",
+        "the name and the line sit BESIDE the visual and justify toward it, not away from it",
+        "the visual is large enough to recognise and the line is still comfortable beside it",
         "nothing spills OUTSIDE the strip - not the line, not the name, on either side",
-        "the gap between face and text reads as a deliberate gutter, not a collision",
-        "beat 3 is long: it plays in TIMED PARTS that each fit next to the portrait, never clipped",
-        "beat 5 has no face: the portrait column stays reserved, so the text does not slide sideways",
+        "the gap between visual and text reads as a deliberate gutter, not a collision",
+        "beat 3 is long: it plays in TIMED PARTS that each fit beside the visual, never clipped",
+        "beat 5 has no visual: the column stays reserved, so the text does not slide sideways",
+        "beats 6-8 swap in a ship, an icon and an image: THE LAYOUT MUST NOT MOVE - same square,",
+        "  same gutter, same text column. If any of them resizes the strip, square is not holding",
+        "the ship is a live 3D render - judge whether it reads at this size or wants a taller strip",
+        "the image is wide: it should LETTERBOX inside the square, never stretch to fill it",
         "the strip stays readable over the moving view behind it",
     ]~~
-    visual_case("Lower third portrait", _ltp_expect, subtitle="CINEMATIC_PLAN Phase 5 - one face, align left/right", notes="a conversation alternates align; it is not a two-face layout", data="face is a SQUARE sized from the 6em row; text is flex; line measured against what is left; 5 beats, twice through")
+    visual_case("Lower third portrait", _ltp_expect, subtitle="CINEMATIC_PLAN Phase 5/5b - one square visual, align left/right", notes="face, ship, icon and image are interchangeable BECAUSE col-width: square makes them the same shape", data="visual is col-width: square in a 6em row; text is flex; line measured against what is left; 8 beats")
 
     _ltp_n = 0
 ---ltp_beat
-    _ltp_b = _ltp_beats[_ltp_n % len(_ltp_beats)]
+    _ltp_b = _ltp_beats[_ltp_n]
     _ltp_align = _ltp_b[1]
     _ltp_name = _ltp_b[0]
-    # No name marks the faceless beat; otherwise the face follows the side.
+    _ltp_kind = _ltp_b[3]
+
     _ltp_face = None
-    if _ltp_name == "Harkin":
+    _ltp_ship = None
+    _ltp_icon = None
+    _ltp_img = None
+    if _ltp_kind == "face_a":
         _ltp_face = _ltp_face_a
-    if _ltp_name == "Reyes":
+    if _ltp_kind == "face_b":
         _ltp_face = _ltp_face_b
-    overlay_lower_third_portrait(_ltp_name, _ltp_b[2], face=_ltp_face, align=_ltp_align)
+    if _ltp_kind == "ship":
+        _ltp_ship = "tsn_battle_cruiser"
+    if _ltp_kind == "icon":
+        _ltp_icon = "icon_index: 137; color: #8cf;"
+    if _ltp_kind == "image":
+        _ltp_img = _ltp_image
+
+    overlay_lower_third_portrait(_ltp_name, _ltp_b[2], face=_ltp_face, ship=_ltp_ship, icon=_ltp_icon, image=_ltp_img, align=_ltp_align)
     await delay_sim(5)
     _ltp_n += 1
-    jump ltp_beat if _ltp_n < 10
+    jump ltp_beat if _ltp_n < len(_ltp_beats)
 
     visual_expect("portrait: backdrop spawned", _ltp_subject is not None)
     visual_expect("portrait: two distinct faces generated", _ltp_face_a != _ltp_face_b)
-    visual_expect("portrait: every beat ran", _ltp_n == 10)
+    visual_expect("portrait: every beat ran", _ltp_n == len(_ltp_beats))
     ->END
