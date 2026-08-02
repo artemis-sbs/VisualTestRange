@@ -9,7 +9,7 @@
 # must not be the range's own bug.
 
 @console/visual_range !0 ^1 "Visual Range"
-" The specimen stage: the 3D view, the card, and Prev / Re-run / Next.
+" The specimen stage: the 3D view, the card, and the control bar along the bottom.
 #
 # A CONSOLE entry as well as the reroute, so a client that connects late - or one that gets
 # sent back to console select - can still choose the stage. The reroute only catches clients
@@ -68,7 +68,10 @@
     # about the bottom-left of the screen (a lower third, a HUD) is judged in the space the
     # card is sitting on, so hiding it is not a convenience, it is how those get looked at.
     if not visual_text_hidden(client_id):
-        gui_section("area: 1, 52, 46, 99;")
+        # The controls own the bottom strip now, so the card gives up 52-99 and takes 42-89:
+        # it ENDS above them rather than drawing through them, and its top rises by as much as
+        # its bottom lost so a long specimen has the same room it always had.
+        gui_section("area: 1, 42, 46, 89;")
         for _line in visual_card_lines():
             gui_row("row-height: content; padding: 2px, 4px, 2px, 6px;")
             gui_text(_line)
@@ -85,7 +88,7 @@
             if _ws[1] != "":
                 _sb.background_color = _ws[1]
 
-    # Controls, bottom right. Named widgets, not inline calls: an inline
+    # The control bar, along the bottom edge. Named widgets, not inline calls: an inline
     # `on gui_message(gui_button("x")):` is accepted by the mock and rejected by the
     # engine's stricter parser.
     #
@@ -98,20 +101,30 @@
     # putting a mission-wide action in the prev/next group is how it gets pressed by
     # accident.
     #
+    # ONE row along the bottom edge, not a block in the corner. A control bar reads as a
+    # control bar; a two-row block floating over the lower right read as part of the specimen.
+    #
     # A fixed px row-height, not 1fr: 1fr stretched the buttons to whatever was left of the
     # section, so they grew and shrank as the row count changed.
-    gui_section("area: 62, 82, 99, 99;")
-    gui_row("row-height: 55px;")
+    #
+    # PADDING is not cosmetic here - without it a button's label is drawn hard against the
+    # column edge and the first character is clipped by the section boundary ("< Prev" came out
+    # as "Prev", "Show text" as "ow text").
+    gui_section("area: 1, 90, 58, 99;")
+    gui_row("row-height: 55px; padding: 2px, 6px, 2px, 6px;")
     _btn_prev = gui_button("< Prev")
     _btn_again = gui_button("Replay")
     _btn_next = gui_button("Next >")
-    gui_row("row-height: 55px;")
     _txt_label = "Show text"
     if not visual_text_hidden(client_id):
         _txt_label = "Hide text"
     _btn_text = gui_button(_txt_label)
     _btn_restart = gui_button("Restart Mission")
-    gui_row("row-height: content;")
+
+    # Position sits beside the bar, not under it - a row of its own would double the bar's
+    # height for one short string.
+    gui_section("area: 59, 90, 78, 99;")
+    gui_row("row-height: 55px; padding: 2px, 6px, 2px, 6px;")
     gui_text(visual_text(visual_stage_position(), "gui-1", "#8fa4bd"))
 
     on gui_message(_btn_prev):
