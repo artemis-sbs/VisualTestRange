@@ -64,11 +64,14 @@
     await delay_sim(0)
     visual_camera_apply(client_id)
 
-    # The card, bottom left, over the view.
-    gui_section("area: 1, 52, 46, 99;")
-    for _line in visual_card_lines():
-        gui_row("row-height: content; padding: 2px, 4px, 2px, 6px;")
-        gui_text(_line)
+    # The card, bottom left, over the view - unless this console has hidden it. A specimen
+    # about the bottom-left of the screen (a lower third, a HUD) is judged in the space the
+    # card is sitting on, so hiding it is not a convenience, it is how those get looked at.
+    if not visual_text_hidden(client_id):
+        gui_section("area: 1, 52, 46, 99;")
+        for _line in visual_card_lines():
+            gui_row("row-height: content; padding: 2px, 4px, 2px, 6px;")
+            gui_text(_line)
 
     # Controls a SPECIMEN asked for. Only a console can build GUI, so a specimen about how a
     # control LOOKS has nowhere else to put it; it declares them as data and they are drawn
@@ -85,11 +88,29 @@
     # Controls, bottom right. Named widgets, not inline calls: an inline
     # `on gui_message(gui_button("x")):` is accepted by the mock and rejected by the
     # engine's stricter parser.
-    gui_section("area: 62, 88, 99, 99;")
-    gui_row("row-height: 1fr;")
+    #
+    # WORDING. Two different "do it again"s live here and they must not read alike:
+    #   Replay  - play THIS specimen again. Same scene, same objects, from the top.
+    #   Restart - throw the whole range away and reload the mission.
+    # "Re-run" said neither, so it was read as whichever the reader had in mind. The nouns
+    # do the work: `Replay` has no object because it means the thing you are looking at;
+    # `Restart Mission` names what it destroys. They also sit on separate rows, because
+    # putting a mission-wide action in the prev/next group is how it gets pressed by
+    # accident.
+    #
+    # A fixed px row-height, not 1fr: 1fr stretched the buttons to whatever was left of the
+    # section, so they grew and shrank as the row count changed.
+    gui_section("area: 62, 82, 99, 99;")
+    gui_row("row-height: 55px;")
     _btn_prev = gui_button("< Prev")
-    _btn_again = gui_button("Re-run")
+    _btn_again = gui_button("Replay")
     _btn_next = gui_button("Next >")
+    gui_row("row-height: 55px;")
+    _txt_label = "Show text"
+    if not visual_text_hidden(client_id):
+        _txt_label = "Hide text"
+    _btn_text = gui_button(_txt_label)
+    _btn_restart = gui_button("Restart Mission")
     gui_row("row-height: content;")
     gui_text(visual_text(visual_stage_position(), "gui-1", "#8fa4bd"))
 
@@ -101,6 +122,11 @@
     on gui_message(_btn_next):
         visual_step(1)
         task_schedule(visual_run_index)
+    on gui_message(_btn_text):
+        visual_text_toggle(client_id)
+        jump visual_stage
+    on gui_message(_btn_restart):
+        visual_mission_restart()
 
     # A specimen finishing bumps the card sequence; repaint so its card is the one on screen.
     on change visual_card_seq():

@@ -98,6 +98,39 @@ def visual_card_seq():
     return _CARD["seq"]
 
 
+# Which consoles have hidden the card. Per CLIENT, not global: two people looking at the
+# same range should not fight over each other's screen. Keyed by client id, and a client
+# absent from the set is showing the card - so the default survives a mission restart
+# without anything having to clear it.
+_TEXT_HIDDEN = set()
+
+
+def visual_text_hidden(client_id):
+    """Whether this console has hidden the description card."""
+    return client_id in _TEXT_HIDDEN
+
+
+def visual_text_toggle(client_id):
+    """Hide/show the description card on this console. Returns the new state."""
+    if client_id in _TEXT_HIDDEN:
+        _TEXT_HIDDEN.discard(client_id)
+        return False
+    _TEXT_HIDDEN.add(client_id)
+    return True
+
+
+def visual_mission_restart():
+    """Reload and restart THIS mission from scratch.
+
+    The same call the engine's own error screen uses for its rerun button. Distinct from
+    replaying a specimen: this throws away every object, task and camera in the range and
+    starts over, which is the only way to clear state a specimen left behind.
+    """
+    from sbs_utils.fs import get_mission_name
+    from sbs_utils.helpers import FrameContext
+    FrameContext.context.sbs.run_next_mission(get_mission_name())
+
+
 def visual_card_lines():
     """The card as ready-to-draw style strings, so no MAST f-string ever touches the text.
 
