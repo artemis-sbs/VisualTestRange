@@ -1,0 +1,70 @@
+# [Cinematics](cinematics)
+
+A real cutscene and a real rundown, authored the way a mission would author them -
+so the format is exercised by a CONSUMER rather than only by unit tests, and so
+`sbs lint` has something to validate.
+
+`Subject:` names a **cast** the specimen binds before playing (`cutscene_cast`), which
+is why the same file can be replayed against different ships without editing.
+
+## [Chapter One](intro)
+---
+Letterbox: yes
+Skippable: yes
+Bar: 4
+---
+
+## [Establish the station](intro_1)
+---
+Cutscene: intro
+Subject: station
+Lens: 0, 1200, -5000
+Seconds: 5
+Overlay: lower_third
+Name: Phoenix Control
+---
+All quiet on the belt. Third watch, nothing to report.
+
+## [Push in on the escort](intro_2)
+---
+Cutscene: intro
+Subject: escort
+Move: 0, 900, -4000 -> 0, 200, -700
+Seconds: 7
+Ease: in_out
+---
+
+## [Hold on the escort](intro_3)
+---
+Cutscene: intro
+Subject: escort
+Lens: 700, 150, -700
+Seconds: 5
+Overlay: lower_third
+Name: TSN Escort
+---
+Confirmed, Phoenix. Holding station off your bow.
+
+## [Wide of the belt](patrol_wide)
+---
+Rundown: patrol
+Subject: station
+Lens: 0, 6000, -12000
+Label: Wide - the belt
+---
+
+## [Close on the station](patrol_station)
+---
+Rundown: patrol
+Subject: station
+Lens: 0, 400, -1400
+Label: Close - Phoenix
+---
+
+## [On the escort](patrol_escort)
+---
+Rundown: patrol
+Subject: escort
+Lens: 0, 150, -600
+Label: Escort
+---

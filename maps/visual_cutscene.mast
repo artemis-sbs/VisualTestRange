@@ -1,0 +1,101 @@
+# SPECIMEN: a declarative cutscene, then a rundown - the whole cinematic stack at once.
+#
+# Everything below Phase 1 has only ever been seen in the MOCK. This is the specimen that
+# makes it runnable in the engine, which matters more here than usual: every camera finding
+# this project has (dolly==target, world-space offsets, a deleted dolly falling to a top-down)
+# came from an engine session contradicting something that looked fine in the mock.
+#
+# It plays `cinematics.amd` - the same file `sbs lint` validates - so the AMD format is
+# exercised by a real consumer rather than only by unit tests. The shots name a CAST
+# (`Subject: station` / `Subject: escort`), bound here before playing; that is the whole point
+# of a cast, and it is why this file contains no coordinates.
+#
+# What only an engine session can settle:
+#   - do the MOVE shots glide, or step? The driver re-aims every tick at 5Hz MAST, and
+#     whether that reads as motion or as a stutter is the one thing the mock cannot tell us;
+#   - does a CUT between shots land clean, or flash black? Two ids are known to draw black,
+#     and the fold is supposed to make that impossible - this is the fold under load;
+#   - does the letterbox sit over the 3D view without eating the shot?
+#   - after the rundown punches, does PROGRAM actually change to the punched shot?
+
+@map/visual_cutscene "Visual: cutscene + rundown"
+" Plays cinematics.amd end to end, then punches a rundown. The whole cinematic stack.
+    visual_set_index_by_name("cutscene")
+    await task_schedule(run_visual_cutscene)
+    ->END
+
+
+=== run_visual_cutscene
+metadata: ``` yaml
+type: visual/cutscene
+```
+    # The cast. Two ordinary objects; the .amd never names them, which is what lets the same
+    # scene be replayed against a different ship.
+    _cut_station = to_object(npc_spawn(0, 0, 0, "Phoenix", "tsn", "starbase_command", "behav_station"))
+    _cut_escort = to_object(npc_spawn(1800, 0, 0 - 600, "Escort", "tsn", "tsn_light_cruiser", "behav_npcship"))
+    for _cut_i in range(8):
+        terrain_spawn(0 - 7000 + _cut_i * 1800, 0, 4000, f"cutref{_cut_i}", "#,ref", "plain_asteroid_9", "behav_asteroid")
+
+    # amd_document takes the TEXT, not a path - media_read_relative_file is how LM
+    # loads its own .amd, so this reads the same way a mission would.
+    _cut_doc = amd_document(media_read_relative_file("cinematics.amd"))
+    _cut_loaded = amd_cutscenes(amd_root_node(_cut_doc))
+
+    cutscene_cast("station", _cut_station)
+    cutscene_cast("escort", _cut_escort)
+
+    _cut_expect = ~~[
+        "the letterbox bars appear, and the 3D view keeps drawing between them",
+        "SHOT 1 holds wide on the station with a lower third: 'Phoenix Control'",
+        "SHOT 2 PUSHES IN on the escort - watch whether it GLIDES or steps",
+        "SHOT 3 cuts to a closer angle with a second lower third",
+        "each cut lands on a picture - never a black frame, which is what the fold prevents",
+        "the letterbox and the lower third both clear when the cutscene ends",
+        "THEN the rundown: three shots are staged and punched in turn",
+        "each punch changes what you are looking at immediately - a cut, not a slide",
+    ]~~
+    visual_case("Cutscene + rundown", _cut_expect, subtitle="the whole cinematic stack, driven by cinematics.amd", notes="the .amd names a CAST, bound here - which is why this specimen has no coordinates in it", data="3 shots + a 3-shot rundown; the same file sbs lint validates")
+
+    # --- wait for an AUDIENCE ---------------------------------------------------------
+    # A console attaches a moment AFTER the map starts, and a cutscene with no audience
+    # resolves instantly by design (a shot nobody can see must not hang the story). So
+    # playing immediately plays to nobody - silently, and the only symptom is a scene
+    # that reports zero shots. Wait for a console, but never forever.
+    _cut_wait = 0
+---cut_wait_console
+    _cut_wait += 1
+    if len(visual_console_clients()) == 0 and _cut_wait < 12:
+        await delay_sim(1)
+        jump cut_wait_console
+
+    # --- the cutscene ---------------------------------------------------------------
+    _cut_result = await cutscene_amd("intro", to=visual_console_clients())
+    visual_case_note("cutscene finished - now the rundown")
+
+    # --- the rundown ----------------------------------------------------------------
+    # PROGRAM is this console. A real show would put PREVIEW on the director's own screen;
+    # here there is one screen, so the punches are what there is to see.
+    rundown_program(visual_console_clients())
+    _cut_shots = rundown_amd("patrol")
+
+    for _cut_tile in rundown_tiles():
+        visual_case_note(f"punching: {_cut_tile['label']}")
+        rundown_punch(_cut_tile["name"])
+        await delay_sim(5)
+
+    rundown_release()
+
+    visual_expect("cutscene: the amd file loaded", _cut_loaded is not None)
+    visual_expect("cutscene: the scene ran to the end", _cut_result is not None)
+    visual_expect("cutscene: it was not skipped", not _cut_result["skipped"])
+    # A cutscene needs an AUDIENCE: with no console attached it resolves at once with
+    # nothing played, which is right (a shot nobody can see must not hang the story)
+    # but means the shot count is only meaningful when someone is watching. Headless
+    # therefore checks the scene RESOLVED; a browser run checks it played through.
+    _cut_watched = len(visual_console_clients()) > 0
+    if _cut_watched:
+        visual_expect("cutscene: all three shots played", _cut_result["shots"] == 3, f"played {_cut_result['shots']}")
+    if not _cut_watched:
+        visual_expect("cutscene: resolved with no audience rather than hanging", _cut_result["shots"] == 0)
+    visual_expect("cutscene: the rundown loaded three shots", _cut_shots == 3, f"loaded {_cut_shots}")
+    ->END

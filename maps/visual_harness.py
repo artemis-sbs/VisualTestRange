@@ -20,6 +20,10 @@ is looking at the picture.
 """
 from sbs_utils.procedural.execution import log
 from sbs_utils.helpers import FrameContext
+# NOTE (learned the hard way): importing a name here does NOT make it a MAST global.
+# Only functions DEFINED in a mission .py become globals; sbs_utils functions become
+# globals only by being registered in mast_sbs_procedural.py. amd_cutscene is now
+# registered there, so specimens can call cutscene_cast / cutscene_amd directly.
 
 
 # ---------------------------------------------------------------------------
