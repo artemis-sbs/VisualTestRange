@@ -20,6 +20,9 @@
 #     would fork the strip and undo the interchangeability the square requirement buys;
 #   - does the image letterbox cleanly inside the square rather than distorting?
 #
+# The last two beats carry REPLY BUTTONS, which are optional on this strip. They are raced
+# against a timeout so an unattended sweep is never stalled by a beat waiting for a click.
+#
 # Three beats are deliberately awkward: a long line (so the cycling split is judged against the
 # REDUCED width), a speaker with no visual at all (so the reserved column is checked for
 # sideways jump), and a wide image (so aspect handling is visible).
@@ -81,6 +84,11 @@ type: visual/lower_third_portrait
         "the image is 1920x860: it should LETTERBOX inside the square with bands above and below,",
         "  never stretch to fill it - a squashed operator is the failure this beat is looking for",
         "the strip stays readable over the moving view behind it",
+        "REPLY BEATS (last two): a row of buttons appears BELOW the strip, and the portrait",
+        "  does NOT change size - a choice must read as the same shot, not a new one",
+        "the replies hug the speaker's side: left-aligned beat left, right-aligned beat right",
+        "pressing one reports it on the card; pressing nothing times out and moves on",
+        "after the last beat BOTH strips are gone - nothing is left over for the next specimen",
     ]~~
     visual_case("Lower third portrait", _ltp_expect, subtitle="CINEMATIC_PLAN Phase 5/5b - one square visual, align left/right", notes="face, ship, icon and image are interchangeable BECAUSE col-width: square makes them the same shape", data="visual is col-width: square in a 6em row; text is flex; line measured against what is left; 8 beats")
 
@@ -111,7 +119,35 @@ type: visual/lower_third_portrait
     _ltp_n += 1
     jump ltp_beat if _ltp_n < len(_ltp_beats)
 
+    # --- REPLY BEATS ---------------------------------------------------------------
+    # Buttons are optional on this strip, and until something draws them nobody has ever
+    # SEEN the reply row - unit tests only ever inspected what the builder asked for.
+    #
+    # `seconds` is the TIMEOUT, not a race the caller writes: an unanswered choice
+    # resolves with no data instead of stalling the sweep, and the card clears with it.
+    # (Writing this as promise_any(reply, delay_sim(25)) is what exposed the bug that
+    # `seconds` used to dismiss the buttons and leave the promise pending forever.)
+    visual_case_note("REPLY BEAT - press Fire or Hold, or wait 25s and it moves on")
+    # AWAIT THE CALL, not a variable holding the promise: MAST's await takes a call
+    # form, so `p = f()` then `await p` does not compile ("Unrecognized syntax").
+    _ltp_res = await overlay_lower_third_portrait("Harkin", "Do we fire, or hold station?", face=_ltp_face_a, align="left", buttons=["Fire", "Hold"], on_reply="visual_reply", seconds=25)
+
+    _ltp_answer = "nobody pressed - timed out"
+    if _ltp_res.data is not None:
+        _ltp_answer = _ltp_res.data
+    visual_case_note(f"reply was: {_ltp_answer}")
+
+    # Right-aligned, so the reply row is checked on BOTH sides: the buttons should hug the
+    # same edge as the portrait, not stay where the left-hand beat put them.
+    _ltp_res2 = await overlay_lower_third_portrait("Reyes", "Your call, Captain.", face=_ltp_face_b, align="right", buttons=["Acknowledge"], seconds=20)
+
+    # Clear BOTH slots. The strip is sticky - without this it stays on screen into the next
+    # specimen, which is a range reporting someone else's furniture as its own.
+    overlay_clear("lower_third")
+    overlay_clear("lower_third_choice")
+
     visual_expect("portrait: backdrop spawned", _ltp_subject is not None)
+    visual_expect("portrait: the reply beat resolved (press or timeout)", _ltp_res is not None)
     visual_expect("portrait: two distinct faces generated", _ltp_face_a != _ltp_face_b)
     visual_expect("portrait: every beat ran", _ltp_n == len(_ltp_beats))
     # If the shared media pack goes missing, the image beat silently shows an empty column and
