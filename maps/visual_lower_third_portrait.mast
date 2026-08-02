@@ -15,7 +15,9 @@
 #   - is the strip the right HEIGHT - the visual is a square sized from it, so the row height
 #     is what decides how big it reads and how much is left for the line;
 #   - is the gutter between visual and text the right thickness?
-#   - does a SHIP read at that size? It is a live 3D render, and it may be a smudge;
+#   - how legibly does a SHIP render at that size? Worth knowing and worth raising with the
+#     engine if it is too small - but NOT a reason to give the ship its own row height, which
+#     would fork the strip and undo the interchangeability the square requirement buys;
 #   - does the image letterbox cleanly inside the square rather than distorting?
 #
 # Three beats are deliberately awkward: a long line (so the cycling split is judged against the
@@ -43,11 +45,12 @@ type: visual/lower_third_portrait
     _ltp_face_a = random_terran()
     _ltp_face_b = random_terran()
 
-    # A real wide image if the shared pack is here; otherwise that beat falls back to the empty
-    # column, which is itself worth seeing.
+    # LM's operator.png - 1920x860, so better than 2:1. Squeezed into a square instead of
+    # letterboxed, that distortion is unmissable, which is the point of using a wide source.
+    # Falls back to the empty column if the shared pack is absent, which is itself worth seeing.
     _ltp_image = ""
-    if media_shared_exists("artemis_home_page"):
-        _ltp_image = media_shared("artemis_home_page")
+    if media_shared_exists("operator"):
+        _ltp_image = media_shared("operator")
 
     # name, align, line, visual. Two speakers trading the strip, then the awkward cases, then
     # the other three sources at the same row height for comparison.
@@ -59,7 +62,7 @@ type: visual/lower_third_portrait
         ["",       "left",  "This beat has NO visual - the column should stay reserved, not jump.", ""],
         ["Phoenix", "right", "A SHIP in the square: a live 3D render at the same size as a face.", "ship"],
         ["Objective", "left", "An ICON in the square: already square, so it should not shift a thing.", "icon"],
-        ["Archive", "right", "An IMAGE in the square: wide source, so it should letterbox, not stretch.", "image"],
+        ["Operator", "right", "An IMAGE in the square: a 1920x860 source, so it must letterbox, not stretch.", "image"],
     ]~~
 
     _ltp_expect = ~~[
@@ -73,8 +76,10 @@ type: visual/lower_third_portrait
         "beat 5 has no visual: the column stays reserved, so the text does not slide sideways",
         "beats 6-8 swap in a ship, an icon and an image: THE LAYOUT MUST NOT MOVE - same square,",
         "  same gutter, same text column. If any of them resizes the strip, square is not holding",
-        "the ship is a live 3D render - judge whether it reads at this size or wants a taller strip",
-        "the image is wide: it should LETTERBOX inside the square, never stretch to fill it",
+        "the ship is a live 3D render: note how legibly it reads, but a small-looking hull is an",
+        "  ENGINE render question - the strip does NOT grow a per-source height, that would fork it",
+        "the image is 1920x860: it should LETTERBOX inside the square with bands above and below,",
+        "  never stretch to fill it - a squashed operator is the failure this beat is looking for",
         "the strip stays readable over the moving view behind it",
     ]~~
     visual_case("Lower third portrait", _ltp_expect, subtitle="CINEMATIC_PLAN Phase 5/5b - one square visual, align left/right", notes="face, ship, icon and image are interchangeable BECAUSE col-width: square makes them the same shape", data="visual is col-width: square in a 6em row; text is flex; line measured against what is left; 8 beats")
@@ -109,4 +114,7 @@ type: visual/lower_third_portrait
     visual_expect("portrait: backdrop spawned", _ltp_subject is not None)
     visual_expect("portrait: two distinct faces generated", _ltp_face_a != _ltp_face_b)
     visual_expect("portrait: every beat ran", _ltp_n == len(_ltp_beats))
+    # If the shared media pack goes missing, the image beat silently shows an empty column and
+    # the letterbox question goes unasked. Say so instead.
+    visual_expect("portrait: operator.png resolved from shared media", _ltp_image != "", f"got {_ltp_image!r}")
     ->END
