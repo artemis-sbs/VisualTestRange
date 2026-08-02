@@ -1,0 +1,67 @@
+# SPECIMEN: `col-width: square` - the width keyword that reads the OTHER axis.
+#
+# Every other col-width keyword derives a width from the column's own content. This one
+# derives it from the row HEIGHT, which is what a portrait, an icon, a ship render or a
+# badge nearly always wants - and it is what makes the four visuals in the lower third
+# interchangeable.
+#
+# Why it needs an EYE and not another unit test: a test can assert the builder asked for
+# `col-width: square`. Only looking can tell you whether what came out is actually SQUARE.
+# The width is derived from the row height through the ASPECT RATIO, so a bug there
+# produces subtly oblong boxes that pass every structural assertion - and gets worse the
+# further the screen is from 16:9. Resize the browser and watch them: they must stay
+# square, not stretch with the window.
+#
+# Rows 3 and 4 are the behavior change: square and an explicit width are now MUTUALLY
+# EXCLUSIVE, so a width on an already-square widget un-squares it rather than being
+# double-counted and drawn outside its row.
+
+@map/visual_square_width "Visual: col-width square"
+" Squares at three row heights, four sources at one, and what an explicit width does to them.
+    visual_set_index_by_name("square_width")
+    await task_schedule(run_visual_square_width)
+    ->END
+
+
+=== run_visual_square_width
+metadata: ``` yaml
+type: visual/square_width
+```
+    # A live view behind it, because these boxes are translucent and layout over a moving
+    # background is where edge errors actually show.
+    _sq_subject = to_object(npc_spawn(0, 0, 0, "Backdrop", "tsn", "starbase_command", "behav_station"))
+    _sq_anchor = visual_anchor(0, 0, 0)
+    visual_camera(_sq_anchor, eye=(0, 1200, 0 - 3800))
+
+    _sq_face = random_terran()
+    _sq_image = ""
+    if media_shared_exists("operator"):
+        _sq_image = media_shared("operator")
+
+    _sq_expect = ~~[
+        "THE BOXES ARE SQUARE - as tall as they are wide. This is the whole specimen",
+        "resize the browser window: they must STAY square, not stretch with it",
+        "  (the width comes from the row height via the aspect ratio - that is where it breaks)",
+        "the three stacked boxes step up 2em / 4em / 7em: a square tracks its ROW's height",
+        "the face, ship, icon and image row all occupy the SAME footprint as each other",
+        "the 'col-width: 12' face is NOT square - the explicit width wins, which is the fix:",
+        "  it used to be counted twice and drawn outside its row instead",
+        "the same face on the next row IS square again",
+        "the last row: a square between two flex columns holds its shape, neighbours take the rest",
+        "nothing is drawn outside its row or over the row below it",
+    ]~~
+    visual_case("col-width: square", _sq_expect, subtitle="the width keyword that reads the other axis", notes="a test can assert the ASK; only an eye can confirm the box came out square", data="rows: 2/4/7em ladder, four sources at 5em, explicit-width vs square, square between flex")
+
+    # A specimen cannot build GUI - only a console can - so the panel is a registered
+    # overlay KIND (maps/visual_square_panel.py) and this shows it. Fullscreen slot: the
+    # matrix needs the room, and the point is the boxes, not where they sit.
+    overlay_kind("visual_square", slot="fullscreen", face=_sq_face, ship="tsn_battle_cruiser", icon="icon_index: 137;color:#8cf;", image=_sq_image)
+
+    # Long hold: this one is read, not watched.
+    await delay_sim(visual_hold(45))
+    overlay_clear("fullscreen")
+
+    visual_expect("square: backdrop spawned", _sq_subject is not None)
+    visual_expect("square: a face was generated for the source row", _sq_face != "")
+    visual_expect("square: operator.png resolved for the image source", _sq_image != "")
+    ->END
