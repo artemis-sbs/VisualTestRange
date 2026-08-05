@@ -1,0 +1,53 @@
+# SPECIMEN: the `layer:` style key - does our plumbing reach the engine?
+#
+# Companion to visual_draw_layer. That one asked the ENGINE whether an opaque fill at a
+# higher draw_layer hides an overflow, and got a yes - but it asked by emitting raw
+# send_gui_* at hand-written rects, deliberately bypassing our layout. So it proved
+# nothing about sbs_utils.
+#
+# This one drives the same effect through the normal gui_* path: the `layer:` style key,
+# the section->row->column cascade, the unpinned row backgrounds, and ImageAtlas no
+# longer dropping draw_layer. All of that is GUI_LAYER_CLIP_PLAN.md Phase B, and all of
+# it has only ever run headless - missions load the PACKAGED sbslib, so a working-tree
+# edit is invisible in the engine until `python sbs.pyz lib sbs_utils` is run.
+#
+# Each pair is the same overflow twice, with and without `layer:`. The WITHOUT case is
+# the control and must look exactly as it always did: back-compat is half the claim.
+
+@map/visual_layer_style "Visual: layer style key"
+" The layer: style key through the normal gui_* path - feature and back-compat control side by side.
+    visual_set_index_by_name("layer_style")
+    await task_schedule(run_visual_layer_style)
+    ->END
+
+
+=== run_visual_layer_style
+metadata: ``` yaml
+type: visual/layer_style
+```
+    # A lit 3D view behind it, so the bands can be judged for OPACITY as well as order.
+    _ls_subject = to_object(npc_spawn(0, 0, 0, "Backdrop", "tsn", "starbase_command", "behav_station"))
+    _ls_anchor = visual_anchor(0, 0, 0)
+    visual_camera(_ls_anchor, lens=(0, 1200, 0 - 3800))
+
+    _ls_expect = ~~[
+        "band 1 (blue, layer: on the row) is SOLID - the spill is hidden behind it",
+        "band 2 (red, NO layer:) still shows the spill over it - the unchanged default",
+        "  if band 2 also hides its spill, back-compat broke: every existing background moved",
+        "band 3 (green) is solid AND its own text is readable on top - the cascade works",
+        "band 4 (olive, a gui_image) is solid - ImageAtlas no longer drops draw_layer",
+        "every band must be OPAQUE - no starbase showing through any of them",
+        "if bands 1, 3 and 4 look like band 2, the packaged sbslib is stale - rebuild it",
+    ]~~
+    visual_case("layer: style key", _ls_expect, subtitle="GUI_LAYER_CLIP_PLAN.md Phase B, through the layout", notes="visual_draw_layer proved the ENGINE occludes; this proves OUR plumbing delivers it", data="4 bands: row layer, no-layer control, cascade from the row, gui_image")
+
+    overlay_kind("visual_layer_style", slot="fullscreen")
+
+    # Long hold: this one is read, not watched.
+    await delay_sim(visual_hold(45))
+    overlay_clear("fullscreen")
+
+    visual_expect("layer_style: backdrop spawned", _ls_subject is not None)
+    # The overlay swallows builder exceptions, so a green run proves nothing on its own.
+    visual_expect("layer_style: the panel built all four bands", rows_built() == 21)
+    ->END

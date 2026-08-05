@@ -1,0 +1,74 @@
+# SPECIMEN: draw_layer occlusion - can paint order stand in for clipping?
+#
+# The engine does not clip. Text wider or taller than its rect is drawn anyway, over
+# whatever is beside or below it, and in a real Cosmos session that shows up as content
+# overflowing to the RIGHT and to the BOTTOM of its panel. The library's existing answers
+# all change the TEXT (content sizing, then overflow: shrink | ellipsis | hide); none of
+# them can hide a spill that has already happened.
+#
+# GUI_LAYER_CLIP_PLAN.md proposes a different axis: draw_layer plus an OPAQUE fill. That
+# is not clipping, it is occlusion - but to an eye the two are the same thing, and the
+# geometry lines up unusually well, because overflow only ever goes right and down while
+# document order also runs left-to-right and top-to-bottom. The victim of a spill is
+# therefore always emitted AFTER the spiller.
+#
+# Why it needs an EYE and not a unit test: a test can assert we asked for draw_layer 2000.
+# Only looking can tell you whether the engine PAINTED it on top, and whether the fill
+# came out opaque. The browser mock cannot answer it either - it clips at region
+# boundaries, so it hides the exact failure being studied.
+#
+# Everything in the plan is gated on cell 2. Read the cards on screen; they say what each
+# cell means and what its result implies.
+
+@map/visual_draw_layer "Visual: draw_layer occlusion"
+" Does an opaque fill at a higher draw_layer hide an overflowing string? Gates GUI_LAYER_CLIP_PLAN.
+    visual_set_index_by_name("draw_layer")
+    await task_schedule(run_visual_draw_layer)
+    ->END
+
+
+=== run_visual_draw_layer
+metadata: ``` yaml
+type: visual/draw_layer
+```
+    # A lit 3D view behind the panel, so the fills can be judged for OPACITY as well as
+    # for order - a translucent occluder shows the hull through it and answers a
+    # different question than the one being asked.
+    _dl_subject = to_object(npc_spawn(0, 0, 0, "Backdrop", "tsn", "starbase_command", "behav_station"))
+    _dl_anchor = visual_anchor(0, 0, 0)
+    visual_camera(_dl_anchor, lens=(0, 1200, 0 - 3800))
+
+    _dl_expect = ~~[
+        "CELL 2 IS THE SPECIMEN: is the overflowing text GONE behind solid blue?",
+        "  yes -> occlusion works, GUI_LAYER_CLIP_PLAN Phase B is live",
+        "  no  -> the engine composites text above images regardless; the plan is dead",
+        "cell 1 is the baseline - that is what an unhidden overflow looks like",
+        "cell 3 (fill, no draw_layer) separates the LAYER from mere emission order",
+        "cell 4 (fill at 500, under the text) MUST still show the spill - if it does not,",
+        "  draw_layer is being ignored entirely and emission order is what rules",
+        "cells 5 and 6 bracket the button layer: covered at 5000, visible at 500 = 1001",
+        "hover cell 5's covered button: if it still highlights, a fill does not steal input",
+        "every fill must be OPAQUE - no starbase visible through the blue or the red",
+    ]~~
+    visual_case("draw_layer occlusion", _dl_expect, subtitle="gates GUI_LAYER_CLIP_PLAN.md Phase B", notes="the engine has no clip; this asks whether paint order plus an opaque fill can stand in for one", data="6 cells: 4 spill cases at different layers, 2 button cases bracketing the button layer")
+
+    # A specimen cannot build GUI - only a console can - so the panel is a registered
+    # overlay KIND (maps/visual_draw_layer_panel.py) and this shows it. It emits raw
+    # send_gui_* at explicit rects rather than going through the layout, because the two
+    # library gaps the plan is about (pinned background layers, gui_image dropping
+    # draw_layer) are exactly what would be in the way.
+    overlay_kind("visual_draw_layer", slot="fullscreen")
+
+    # Long hold: this one is read and hovered, not watched.
+    await delay_sim(visual_hold(60))
+    overlay_clear("fullscreen")
+
+    visual_expect("draw_layer: backdrop spawned", _dl_subject is not None)
+    visual_expect("draw_layer: six cells declared", len(cell_specs()) == 6)
+    visual_expect("draw_layer: the control cell has no occluder", cell_specs()[0][2] == False)
+    visual_expect("draw_layer: cell 2 asks for layer 2000", cell_specs()[1][1] == 2000)
+    visual_expect("draw_layer: cell 4 asks for a layer under the text default", cell_specs()[3][1] == 500)
+    # The overlay swallows builder exceptions, so a green run proves nothing on its own.
+    # 25 widgets = 2 header lines + 4 spill cells (3 or 4 each) + 2 button cells (4 each).
+    visual_expect("draw_layer: the panel actually emitted its 25 widgets", emitted_count() == 25)
+    ->END
