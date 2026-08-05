@@ -849,3 +849,23 @@ def visual_reset_sim():
     from sbs_utils.procedural.cosmos import sim_create, sim_resume
     sim_create()
     sim_resume()
+
+
+def mod_art_declare():
+    """Declare the mod-art candidates, the same call an add-on makes.
+
+    Kept in the harness rather than the specimen because `import <file>.py` merges only
+    FUNCTIONS into MAST's namespace and every one becomes a MAST global - a second .py just
+    to hold this would be one more name to collide with.
+    """
+    import os
+    from sbs_utils.fs import get_mission_dir
+    from sbs_utils.procedural.ship_data_mod import ship_data_merge_mod
+    path = os.path.join(get_mission_dir(), "maps", "mod_art_ships.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except OSError as e:
+        log("mod art: cannot read " + path + ": " + str(e), "visual", "warning")
+        return None
+    return ship_data_merge_mod(text, "VisualTestRangeModArt")

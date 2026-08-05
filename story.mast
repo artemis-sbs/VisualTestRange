@@ -22,6 +22,7 @@ import maps/visual_all.mast
 
 # --- specimens -------------------------------------------------------------
 import maps/visual_art_census.mast
+import maps/visual_mod_art.mast
 import maps/visual_blackhole.mast
 import maps/visual_planet.mast
 import maps/visual_torpedo.mast
@@ -51,6 +52,14 @@ import maps/visual_camera_zero_id.mast
 
 # A tool mission: no connect dialog.
 sbs.suppress_client_connect_dialog(0)
+
+# The mod-art specimen's ships, declared HERE and not in the specimen. sim_create() is what
+# writes extraShipData.json and the engine reads it inside create_new_sim() - and the LM
+# server console calls sim_create() when it starts a map, which is AFTER any specimen body
+# runs. Declaring in the specimen would land after the engine had already read the file, so
+# every candidate would draw the placeholder and be misread as "the path does not work".
+# Top level runs before the picker, so it lands in time. See maps/visual_mod_art.mast.
+mod_art_declare()
 
 # How long visual_all holds each specimen on screen before building the next.
 shared VISUAL_HOLD_SECONDS = 6

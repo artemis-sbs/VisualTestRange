@@ -1,0 +1,77 @@
+# SPECIMEN: can a mod carry its OWN art, with no engine change?
+#
+# `artfileroot` resolves relative to `data/graphics/ships`. That is a PATH, so a relative
+# one climbs out of it:
+#
+#     data/graphics/ships/ + ../../missions/<mod>/graphics/ships/God_Phoenix
+#                          -> data/missions/<mod>/graphics/ships/God_Phoenix
+#
+# Both halves resolve on disk - checked. The open question is whether the ENGINE simply
+# joins the path or refuses to walk out of its own art directory. If it joins, a mod ships
+# its meshes beside its `mod_ships.json` and never writes into the game install, which is
+# the last piece the mod format is missing: stats, roles, interiors and fleet ladders all
+# already declare cleanly.
+#
+# WHY THIS IS A SPECIMEN AND NOT A PROBE. It was first built as a headless probe in
+# `shipdata_min`, which was useless: unresolved art is not an error and no data_set field
+# reports it, so the only readout is a picture, and that mission has no console to look
+# through. This range exists for exactly that case.
+#
+# THE THREE SHIPS BRACKET THE ANSWER, so the frame interprets itself and nobody has to
+# remember what a correct result looks like:
+#
+#     LEFT   positive control - art the engine certainly has. A real hull.
+#     MIDDLE the question     - the relative path out to the anime_ships mod folder.
+#     RIGHT  negative control - a name that exists nowhere. The placeholder.
+#
+# Read the MIDDLE against the two outers. Left and right must differ from each other, or
+# the specimen is broken and the middle means nothing.
+#
+# NOTE the loop variable name: MAST loop state collides by NAME across a schedule chain,
+# so every loop in this range gets its own.
+
+@map/visual_mod_art "Visual: mod-carried art"
+" Can artfileroot reach a mod's own folder? Middle ship against two controls.
+    visual_set_index_by_name("mod_art")
+    await task_schedule(run_visual_mod_art)
+    ->END
+
+
+=== run_visual_mod_art
+metadata: ``` yaml
+type: visual/mod_art
+```
+    # The ships were declared at STORY TOP LEVEL, not here - see story.mast. sim_create()
+    # runs when the server console starts a map, which is after this body, so declaring
+    # here would land after the engine had already read the file and every candidate would
+    # draw the placeholder for the wrong reason.
+    _merged = ship_data_pending_count()
+
+    _gap = 1200
+    _made = 0
+    _keys = ~~["modart_control", "modart_relpath", "modart_bare"]~~
+    for _mi in range(len(_keys)):
+        _o = npc_spawn(0 - _gap + _mi * _gap, 0, 0, _keys[_mi], "tsn", _keys[_mi], "behav_npcship")
+        if _o is not None:
+            _made += 1
+
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, lens=(0, 700, -2200))
+
+    _expect = ~~[
+        "THREE ships in a row, LEFT to RIGHT",
+        "LEFT is a real TSN hull - the positive control",
+        "RIGHT is the placeholder sphere - the negative control",
+        "LEFT and RIGHT must LOOK DIFFERENT, or this specimen proves nothing",
+        "MIDDLE is the answer: a God Phoenix winged craft means a mod CAN carry its own art",
+        "MIDDLE as a placeholder sphere means artfileroot cannot leave data/graphics/ships",
+    ]~~
+    visual_case("Mod-carried art", _expect,
+        notes="middle artfileroot = ../../missions/anime_mods/anime_ships/graphics/ships/God_Phoenix",
+        data=f"{_made} of 3 spawned, {_merged} entries declared")
+
+    # The data half. It can confirm the ships EXIST and were declared - it cannot see art,
+    # which is the whole reason this is a specimen.
+    visual_expect("mod art: all three spawned", _made == 3, f"{_made}/3")
+    visual_expect("mod art: entries declared", _merged is not None and _merged > 0)
+    ->END
