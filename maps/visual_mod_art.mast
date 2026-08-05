@@ -18,14 +18,25 @@
 # through. This range exists for exactly that case.
 #
 # THE THREE SHIPS BRACKET THE ANSWER, so the frame interprets itself and nobody has to
-# remember what a correct result looks like:
+# remember what a correct result looks like. Read them BY NAME, never by side:
 #
-#     LEFT   positive control - art the engine certainly has. A real hull.
-#     MIDDLE the question     - the relative path out to the anime_ships mod folder.
-#     RIGHT  negative control - a name that exists nowhere. The placeholder.
+#     modart_control  art the engine certainly has. Must be a real hull.
+#     modart_relpath  the question - a relative path out to the anime_ships mod folder.
+#     modart_bare     a name that exists nowhere. Must be the placeholder.
 #
-# Read the MIDDLE against the two outers. Left and right must differ from each other, or
-# the specimen is broken and the middle means nothing.
+# THE FRAME IS MIRRORED relative to world X. With the camera at -Z looking toward +Z, world
+# +X lands on SCREEN-LEFT, so the ship spawned at x=-1200 appears on the RIGHT. The first
+# version of this card said "LEFT is the positive control" and the first engine look
+# reported the opposite, which read as a weird result until the controls settled it - the
+# only ship that CAN draw a TSN hull is modart_control, so wherever that hull is, that is
+# where the control is. Judge by name; the names are the spawn names.
+#
+# The two controls must differ from each other, or the specimen is broken and the middle
+# means nothing.
+#
+# RESULT (engine 1.3.4, 2026-08-05): control = real hull, bare = placeholder, relpath =
+# PLACEHOLDER. artfileroot will not climb out of data/graphics/ships. Kept as a regression
+# for the pending engine change that would allow it.
 #
 # NOTE the loop variable name: MAST loop state collides by NAME across a schedule chain,
 # so every loop in this range gets its own.
@@ -58,13 +69,15 @@ type: visual/mod_art
     _anchor = visual_anchor(0, 0, 0)
     visual_camera(_anchor, lens=(0, 700, -2200))
 
+    # Judge BY NAME, not by side: the frame is mirrored, so x=-1200 draws on the RIGHT.
     _expect = ~~[
-        "THREE ships in a row, LEFT to RIGHT",
-        "LEFT is a real TSN hull - the positive control",
-        "RIGHT is the placeholder sphere - the negative control",
-        "LEFT and RIGHT must LOOK DIFFERENT, or this specimen proves nothing",
-        "MIDDLE is the answer: a God Phoenix winged craft means a mod CAN carry its own art",
-        "MIDDLE as a placeholder sphere means artfileroot cannot leave data/graphics/ships",
+        "THREE ships in a row - read them by NAME, the frame is mirrored in X",
+        "modart_control is a real TSN hull (positive control)",
+        "modart_bare is the placeholder sphere (negative control)",
+        "those two must LOOK DIFFERENT, or this specimen proves nothing",
+        "modart_relpath is the answer: a winged craft = a mod CAN carry its own art",
+        "modart_relpath as a placeholder = artfileroot cannot leave data/graphics/ships",
+        "MEASURED so far: placeholder. This is a regression guard for the engine change.",
     ]~~
     visual_case("Mod-carried art", _expect,
         notes="middle artfileroot = ../../missions/anime_mods/anime_ships/graphics/ships/God_Phoenix",
