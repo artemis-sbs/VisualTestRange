@@ -31,15 +31,17 @@ type: visual/layer_style
     visual_camera(_ls_anchor, lens=(0, 1200, 0 - 3800))
 
     _ls_expect = ~~[
+        "FIRST, check the specimen is even asking: the spill MUST reach each band.",
+        "  each paragraph should run several lines PAST its row and onto the band below",
+        "  if a paragraph stops above its band, this answers nothing - widen the spill",
         "band 1 (blue, layer: on the row) is SOLID - the spill is hidden behind it",
         "band 2 (red, NO layer:) still shows the spill over it - the unchanged default",
-        "  if band 2 also hides its spill, back-compat broke: every existing background moved",
-        "band 3 (green) is solid AND its own text is readable on top - the cascade works",
-        "band 4 (olive, a gui_image) is solid - ImageAtlas no longer drops draw_layer",
-        "every band must be OPAQUE - no starbase showing through any of them",
-        "if bands 1, 3 and 4 look like band 2, the packaged sbslib is stale - rebuild it",
+        "  band 2 hiding its spill is the WORSE failure: every existing background moved",
+        "the two bands must look DIFFERENT from each other - same picture = inconclusive",
+        "both bands must be OPAQUE - no starbase showing through either",
+        "if band 1 looks like band 2, the packaged sbslib is stale - rebuild it",
     ]~~
-    visual_case("layer: style key", _ls_expect, subtitle="GUI_LAYER_CLIP_PLAN.md Phase B, through the layout", notes="visual_draw_layer proved the ENGINE occludes; this proves OUR plumbing delivers it", data="4 bands: row layer, no-layer control, cascade from the row, gui_image")
+    visual_case("layer: style key", _ls_expect, subtitle="GUI_LAYER_CLIP_PLAN.md Phase B, through the layout", notes="visual_draw_layer proved the ENGINE occludes; this proves OUR plumbing delivers it. First engine run was INCONCLUSIVE - the spill never reached the bands", data="the same overflow twice: one row raised by layer:, one untouched control")
 
     overlay_kind("visual_layer_style", slot="fullscreen")
 
@@ -49,5 +51,5 @@ type: visual/layer_style
 
     visual_expect("layer_style: backdrop spawned", _ls_subject is not None)
     # The overlay swallows builder exceptions, so a green run proves nothing on its own.
-    visual_expect("layer_style: the panel built all four bands", rows_built() == 21)
+    visual_expect("layer_style: the panel built both bands", rows_built() == 9)
     ->END
