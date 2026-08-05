@@ -4,3 +4,11 @@ mast.runtime.run*.log
 __pycache__/
 *.pyc
 debug.log
+
+mod_art_variants.json
+mod_art_progress.txt
+art_gen_test/*1024.png
+art_gen_test/*256.png
+art_gen_test/*.paxmesh
+art_gen_test/*.pointcube
+art_gen_test/*.rawbitmap

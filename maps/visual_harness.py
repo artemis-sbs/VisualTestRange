@@ -869,3 +869,267 @@ def mod_art_declare():
         log("mod art: cannot read " + path + ": " + str(e), "visual", "warning")
         return None
     return ship_data_merge_mod(text, "VisualTestRangeModArt")
+
+
+# --- mod-carried art: which combination actually resolves? -------------------
+#
+# Engine 1.3.5 added two things that bear on this: `sbs.add_extra_ship_data(file, path)`,
+# which loads ship data straight out of a mod folder (measured working - the engine read
+# shields [110,90] from anime_ships/mod_ships.json with nothing written into the mission),
+# and `art_file_path`, a PATH sibling to the name-based `artfileroot`, available on hullmap
+# AND in ship data files.
+#
+# On 1.3.4 no arrangement worked: artfileroot resolves relative to data/graphics/ships and
+# would not walk out of it. The question now is which COMBINATION of the two fields, and
+# which spelling of the path, the engine actually honors - so each variant below changes
+# exactly one thing and they are judged side by side in a single frame.
+MOD_ART_VARIANTS = (
+    ("control_ok",  "a hull the engine certainly has",               "tsn_light_cruiser", None),
+    ("root_bare",   "artfileroot only, data loaded from the mod",    "God_Phoenix",       None),
+    ("abs_noext",   "art_file_path ABSOLUTE, no extension",          None,   "{ships}/God_Phoenix"),
+    ("abs_obj",     "art_file_path ABSOLUTE, with .obj",             None,   "{ships}/God_Phoenix.obj"),
+    ("abs_dir",     "art_file_path ABSOLUTE folder + artfileroot",   "God_Phoenix", "{ships}"),
+    ("rel_gfx",     "RELATIVE to data/graphics/ships",               None,
+     "../../missions/anime_mods/anime_ships/graphics/ships/God_Phoenix"),
+    ("rel_mission", "RELATIVE to the mission folder",                None,
+     "../anime_mods/anime_ships/graphics/ships/God_Phoenix"),
+    ("rel_data",    "RELATIVE to the data folder",                   None,
+     "missions/anime_mods/anime_ships/graphics/ships/God_Phoenix"),
+    ("rel_exe",     "RELATIVE to the exe folder",                    None,
+     "data/missions/anime_mods/anime_ships/graphics/ships/God_Phoenix"),
+    ("control_bad", "a name that exists nowhere",                    "God_Phoenix_nope",  None),
+)
+
+
+def mod_art_mark(stage, detail=""):
+    """Leave a breadcrumb on disk, so a variant that ASSERTS the engine still names itself.
+
+    An assert kills the process before any report is written, so the usual "run it and read
+    the output" loop reports nothing at all - the crash is invisible and unattributable.
+    Writing the stage BEFORE attempting it means the last line on disk is the thing that
+    killed it.
+    """
+    import os
+    from sbs_utils.fs import get_mission_dir
+    try:
+        with open(os.path.join(get_mission_dir(), "mod_art_progress.txt"), "a",
+                  encoding="utf-8") as f:
+            f.write(stage + ("  " + detail if detail else "") + chr(10))
+    except OSError:
+        pass
+
+
+def mod_art_only():
+    """One variant name from the launch argument `variant=`, or None for all of them.
+
+        Artemis3-x64-release.exe autostartserver defaultmission=VisualTestRange             map=visual_mod_art variant=abs_obj
+
+    Bisecting a crash needs one variant per process, and this is what makes that a loop a
+    script can drive instead of ten hand edits.
+    """
+    from sbs_utils.procedural.command_line import command_line_get
+    only = command_line_get("variant")
+    return only.strip() if only else None
+
+
+def mod_art_key():
+    """Which KEY spells the art path in a ship data file - `artkey=` on the command line.
+
+    Defaults to `artfilepath`, because shipData spells every key without underscores:
+    `artfileroot`, `meshscale`, `meshrotate`, `torpedostart`. The pybind PROPERTY is
+    `art_file_root`, so the pyi's new `art_file_path` is the property name, and the file
+    key that feeds it should be `artfilepath`.
+
+    Several close-up runs were spent writing `art_file_path` into the file and concluding
+    the engine ignored it. It was the wrong key, not the wrong engine - hence making the
+    spelling a launch argument, so the next guess costs a relaunch and not an edit.
+    """
+    from sbs_utils.procedural.command_line import command_line_get
+    return (command_line_get("artkey") or "artfilepath").strip()
+
+
+def mod_art_build_and_load():
+    """Write the variant ship data, then hand it to the engine by PATH.
+
+    Generated rather than committed because `art_file_path` may need to be absolute, and an
+    absolute path baked into a repo file is wrong on every other machine.
+
+    Returns a (loaded, note) pair so the specimen can say what happened rather than just
+    looking broken.
+    """
+    import json
+    import os
+    from sbs_utils.fs import get_mission_dir
+    from sbs_utils.procedural.ship_data import get_ship_data_for
+
+    mission = get_mission_dir()
+    missions = os.path.dirname(mission)
+    ships = os.path.join(missions, "anime_mods", "anime_ships", "graphics", "ships")
+    ships = ships.replace("\\", "/")
+
+    base = get_ship_data_for("tsn_light_cruiser")
+    if base is None:
+        return False, "no tsn_light_cruiser in ship data to base the variants on"
+    only = mod_art_only()
+    wanted = _mod_art_select(only)
+    if not wanted:
+        return False, "variant=" + str(only) + " matched none of " + ",".join(
+            v[0] for v in MOD_ART_VARIANTS)
+    entries = []
+    for key, _why, root, path in wanted:
+        e = dict(base)
+        e["key"] = "modart_" + key
+        e["name"] = key
+        e["meshscale"] = 0.17 if key == "closeup" else 0.2
+        if root is not None:
+            e["artfileroot"] = root
+        if path is not None:
+            e[mod_art_key()] = path.replace("{ships}", ships)
+        entries.append(e)
+
+    name = "mod_art_variants.json"
+    try:
+        with open(os.path.join(mission, name), "w", encoding="utf-8", newline="\n") as f:
+            f.write(json.dumps({"#ship-list": entries}, indent=4) + "\n")
+    except OSError as e:
+        return False, "could not write " + name + ": " + str(e)
+
+    sbs = FrameContext.context.sbs
+    fn = getattr(sbs, "add_extra_ship_data", None)
+    if fn is None:
+        return False, "add_extra_ship_data absent - engine older than 1.3.5"
+    mod_art_mark("LOADING", ",".join(e["key"] for e in entries))
+    try:
+        fn(name, mission.replace("\\", "/"))
+    except Exception as e:
+        return False, "add_extra_ship_data raised: " + str(e)
+    mod_art_mark("LOADED")
+    return True, "loaded " + str(len(entries)) + " variants from " + name
+
+
+# Variants whose artfileroot names art the engine CANNOT resolve. On engine 1.3.5 that
+# segfaults at render time (exit 0xC0000005, reproduced 4/4 across two rounds) - the object
+# spawns fine and the process dies when it is drawn. On 1.3.4 the same condition drew the
+# `unknown` placeholder, so this is a regression, reported separately.
+#
+# They are kept in the list because they are the honest test of "art the engine does not
+# have", and they must go back in the moment the crash is fixed. `variant=safe` is how the
+# REST of the specimen stays runnable meanwhile: without it one engine bug makes the whole
+# art question unanswerable.
+MOD_ART_CRASHERS = ("root_bare", "abs_dir", "control_bad")
+
+# --- turning the crash into an ORACLE ---------------------------------------
+#
+# Whether an `art_file_path` resolved is normally a question only an eye can answer: if it
+# fails, the ship falls back to its `artfileroot` and still draws a hull, so "worked" and
+# "did not work" look equally fine to any script.
+#
+# Unless the fallback is fatal. An unresolvable `artfileroot` segfaults 1.3.5 at render, so
+# an entry with a DELIBERATELY BROKEN root plus a candidate path answers itself:
+#
+#     engine still alive  -> art_file_path resolved and was drawn
+#     engine died         -> it did not, and the broken root was reached
+#
+# That converts six by-eye comparisons into a loop a script can run unattended. It depends
+# on a bug, so it stops working the day the crash is fixed - which is fine, because a
+# guarded miss will draw the placeholder again and the eye test comes back.
+MOD_ART_ORACLE_ROOT = "God_Phoenix_definitely_not_here"
+
+MOD_ART_ORACLES = (
+    ("none",        None),                       # control: MUST die, or the oracle is void
+    ("abs_noext",   "{ships}/God_Phoenix"),
+    ("abs_obj",     "{ships}/God_Phoenix.obj"),
+    ("rel_gfx",     "../../missions/anime_mods/anime_ships/graphics/ships/God_Phoenix"),
+    ("rel_mission", "../anime_mods/anime_ships/graphics/ships/God_Phoenix"),
+    ("rel_data",    "missions/anime_mods/anime_ships/graphics/ships/God_Phoenix"),
+    ("rel_exe",     "data/missions/anime_mods/anime_ships/graphics/ships/God_Phoenix"),
+)
+
+
+# ONE ship, framed close, at the mod's own meshscale - `variant=closeup_<form>`.
+#
+# This exists because a comparison row is the wrong instrument for "did this work". The row
+# forces every hull to meshscale 0.2 and sits the camera 5800 units back, and at that size a
+# God Phoenix and a TSN light cruiser are both a grey speck. A hedged read of one of those
+# specks was recorded as a confirmed result, and the close-up flatly contradicted it. Judge
+# a hull from close range or do not judge it.
+#
+# artfileroot stays VALID in every close-up, so nothing here can hit the unresolvable-art
+# segfault - the ship falls back to a TSN cruiser instead of killing the engine, which is
+# also what makes the readout unambiguous: TSN cruiser = the path did nothing.
+# THE ENGINE TEAM'S OWN WORKING EXAMPLE - data/missions/BeamArcTest/extraShipDataAAA.json:
+#
+#     "artfileroot": "tsn_light_cr",
+#     "artfilepath": "data/missions/BeamArcTest/extraShipGraphicData",
+#
+# Two things that no amount of guessing here arrived at. `artfilepath` is the FOLDER and
+# `artfileroot` stays the file's base NAME - they work together, rather than one replacing
+# the other - and the path is relative to the EXE folder. Every earlier attempt put a file
+# path into artfilepath and dropped artfileroot, which is neither half right.
+#
+# The second lesson is in the folder listing, not the json. Their art ships the FULL set:
+#
+#     tsn_light_cr.obj .paxmesh .pointcube .rawbitmap .png
+#     tsn_light_cr1024.png tsn_light_cr256.png
+#     _diffuse _emissive _normal _specular
+#
+# The anime mod carries only .obj/.mtl and the four maps - no paxmesh, pointcube, rawbitmap
+# or the 1024/256 bitmaps. That gap is the leading suspect for the render crashes, and it is
+# why `example` below is run FIRST: it uses art that is known complete, so it separates "the
+# mechanism is wrong" from "this particular art is incomplete".
+MOD_ART_TWO_FIELD = {
+    # name           artfileroot        artfilepath (folder, relative to the exe)
+    "example":      ("tsn_light_cr",    "data/missions/BeamArcTest/extraShipGraphicData"),
+    "anime_exe":    ("God_Phoenix",     "data/missions/anime_mods/anime_ships/graphics/ships"),
+    "anime_abs":    ("God_Phoenix",     "{ships}"),
+    # THE DISCRIMINATOR for the render crash. The engine's OWN art, copied into a mod
+    # folder with the derived files (.paxmesh .pointcube .rawbitmap 1024 256) stripped, so
+    # the engine has to generate them exactly as it must for any real mod.
+    #   crashes -> generation is broken for everyone; their BeamArcTest never hits it only
+    #              because its derived files are already committed
+    #   renders -> generation works and the anime .obj itself is what the engine chokes on
+    "gen_test":     ("tsn_light_cr",    "data/missions/VisualTestRange/art_gen_test"),
+}
+
+MOD_ART_PATH_FORMS = {
+    "abs_noext":   "{ships}/God_Phoenix",
+    "abs_obj":     "{ships}/God_Phoenix.obj",
+    "abs_dir":     "{ships}",
+    "rel_gfx":     "../../missions/anime_mods/anime_ships/graphics/ships/God_Phoenix",
+    "rel_mission": "../anime_mods/anime_ships/graphics/ships/God_Phoenix",
+    "rel_data":    "missions/anime_mods/anime_ships/graphics/ships/God_Phoenix",
+    "rel_exe":     "data/missions/anime_mods/anime_ships/graphics/ships/God_Phoenix",
+    "none":        None,
+}
+
+
+def _mod_art_select(only):
+    # The engine team's shape: BOTH fields, artfilepath a folder. `variant=two_example`.
+    if only is not None and only.startswith("two_"):
+        name = only[len("two_"):]
+        pair = MOD_ART_TWO_FIELD.get(name)
+        if pair is None:
+            return []
+        root, folder = pair
+        return [("closeup", "two-field: root=" + root + " folder=" + folder, root, folder)]
+    if only is not None and only.startswith("closeup"):
+        form = only[len("closeup"):].lstrip("_") or "rel_gfx"
+        path = MOD_ART_PATH_FORMS.get(form, "MISSING-FORM")
+        root = "God_Phoenix" if form == "abs_dir" else "tsn_light_cruiser"
+        return [("closeup", "close-up: art_file_path = " + str(path), root, path)]
+    if only is not None and only.startswith("oracle_"):
+        want = only[len("oracle_"):]
+        return [("oracle_" + name, "oracle: broken root + " + str(path),
+                 MOD_ART_ORACLE_ROOT, path)
+                for name, path in MOD_ART_ORACLES if name == want]
+    if only is None:
+        return list(MOD_ART_VARIANTS)
+    if only == "safe":
+        return [v for v in MOD_ART_VARIANTS if v[0] not in MOD_ART_CRASHERS]
+    if only == "crashers":
+        return [v for v in MOD_ART_VARIANTS if v[0] in MOD_ART_CRASHERS]
+    return [v for v in MOD_ART_VARIANTS if v[0] == only]
+
+
+def mod_art_variant_keys():
+    return ["modart_" + v[0] for v in _mod_art_select(mod_art_only())]

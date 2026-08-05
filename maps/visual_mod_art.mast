@@ -1,48 +1,36 @@
-# SPECIMEN: can a mod carry its OWN art, with no engine change?
+# SPECIMEN: which combination lets a mod carry its OWN art?
 #
-# `artfileroot` resolves relative to `data/graphics/ships`. That is a PATH, so a relative
-# one climbs out of it:
+# On engine 1.3.4 nothing did. `artfileroot` resolves relative to `data/graphics/ships` and
+# will not walk out of it - measured here, bracketed by controls.
 #
-#     data/graphics/ships/ + ../../missions/<mod>/graphics/ships/God_Phoenix
-#                          -> data/missions/<mod>/graphics/ships/God_Phoenix
+# Engine 1.3.5 added two things that change the question:
+#   sbs.add_extra_ship_data(file, path)  loads ship data straight out of a mod folder.
+#                                        MEASURED WORKING: the engine read shields [110,90]
+#                                        from anime_ships/mod_ships.json with nothing
+#                                        written into the mission.
+#   art_file_path                        a PATH sibling to the name-based artfileroot,
+#                                        available on hullmap AND in ship data files.
 #
-# Both halves resolve on disk - checked. The open question is whether the ENGINE simply
-# joins the path or refuses to walk out of its own art directory. If it joins, a mod ships
-# its meshes beside its `mod_ships.json` and never writes into the game install, which is
-# the last piece the mod format is missing: stats, roles, interiors and fleet ladders all
-# already declare cleanly.
+# So the data half is solved and only the ART half is open: WHICH combination of the two
+# fields, and which spelling of the path, does the engine honor? Each variant changes
+# exactly one thing, and they are judged side by side in a single frame - nine ships is a
+# lot, but one look settles what would otherwise be ten engine runs. The path spellings
+# cover absolute plus every plausible ROOT a relative one could be resolved against:
+# data/graphics/ships, the mission folder, data/, and the exe folder.
 #
-# WHY THIS IS A SPECIMEN AND NOT A PROBE. It was first built as a headless probe in
-# `shipdata_min`, which was useless: unresolved art is not an error and no data_set field
-# reports it, so the only readout is a picture, and that mission has no console to look
-# through. This range exists for exactly that case.
+# READ THEM BY NAME, NEVER BY SIDE. The frame is mirrored in world X: the ship at the
+# lowest x draws on the RIGHT. An earlier version of this card said LEFT/RIGHT and the
+# first engine look read as a contradiction until the controls settled it. Every ship is
+# name-tagged; judge by the tag.
 #
-# THE THREE SHIPS BRACKET THE ANSWER, so the frame interprets itself and nobody has to
-# remember what a correct result looks like. Read them BY NAME, never by side:
+#     modart_control_ok    must be a real TSN hull      - the frame is working
+#     modart_control_bad   must be the placeholder      - failure is visible
+#     everything between   God Phoenix = that spelling WORKS
 #
-#     modart_control  art the engine certainly has. Must be a real hull.
-#     modart_relpath  the question - a relative path out to the anime_ships mod folder.
-#     modart_bare     a name that exists nowhere. Must be the placeholder.
-#
-# THE FRAME IS MIRRORED relative to world X. With the camera at -Z looking toward +Z, world
-# +X lands on SCREEN-LEFT, so the ship spawned at x=-1200 appears on the RIGHT. The first
-# version of this card said "LEFT is the positive control" and the first engine look
-# reported the opposite, which read as a weird result until the controls settled it - the
-# only ship that CAN draw a TSN hull is modart_control, so wherever that hull is, that is
-# where the control is. Judge by name; the names are the spawn names.
-#
-# The two controls must differ from each other, or the specimen is broken and the middle
-# means nothing.
-#
-# RESULT (engine 1.3.4, 2026-08-05): control = real hull, bare = placeholder, relpath =
-# PLACEHOLDER. artfileroot will not climb out of data/graphics/ships. Kept as a regression
-# for the pending engine change that would allow it.
-#
-# NOTE the loop variable name: MAST loop state collides by NAME across a schedule chain,
-# so every loop in this range gets its own.
+# If the two controls look alike, the specimen is broken and nothing between them counts.
 
 @map/visual_mod_art "Visual: mod-carried art"
-" Can artfileroot reach a mod's own folder? Middle ship against two controls.
+" Which artfileroot / art_file_path combination reaches a mod's own meshes?
     visual_set_index_by_name("mod_art")
     await task_schedule(run_visual_mod_art)
     ->END
@@ -52,39 +40,51 @@
 metadata: ``` yaml
 type: visual/mod_art
 ```
-    # The ships were declared at STORY TOP LEVEL, not here - see story.mast. sim_create()
-    # runs when the server console starts a map, which is after this body, so declaring
-    # here would land after the engine had already read the file and every candidate would
-    # draw the placeholder for the wrong reason.
-    _merged = ship_data_pending_count()
+    # Built and loaded HERE rather than at story top level. add_extra_ship_data takes a
+    # path and is documented "just for this mission", and it was measured working when
+    # called after sim_create - unlike extraShipData.json, which must be on disk before
+    # create_new_sim() reads it. The variants carry absolute paths, so the file is
+    # generated at run time: an absolute path committed to a repo is wrong on every other
+    # machine.
+    _loaded, _note = mod_art_build_and_load()
 
-    _gap = 1200
+    _keys = mod_art_variant_keys()
+    _gap = 1100
     _made = 0
-    _keys = ~~["modart_control", "modart_relpath", "modart_bare"]~~
-    for _mi in range(len(_keys)):
-        _o = npc_spawn(0 - _gap + _mi * _gap, 0, 0, _keys[_mi], "tsn", _keys[_mi], "behav_npcship")
+    _x0 = 0 - (len(_keys) - 1) * _gap / 2
+    for _vi in range(len(_keys)):
+        # Breadcrumb BEFORE the spawn: one of these variants asserts the engine, and an
+        # assert writes no report, so the last line in mod_art_progress.txt is the culprit.
+        mod_art_mark("SPAWNING", _keys[_vi])
+        _o = npc_spawn(_x0 + _vi * _gap, 0, 0, _keys[_vi], "tsn", _keys[_vi], "behav_npcship")
         if _o is not None:
             _made += 1
+        mod_art_mark("SPAWNED", _keys[_vi])
 
+    mod_art_mark("SURVIVED ALL SPAWNS")
     _anchor = visual_anchor(0, 0, 0)
-    visual_camera(_anchor, lens=(0, 700, -2200))
+    # One ship gets a tight frame; a row of them needs the wide one. Nothing subtle here -
+    # the wide lens makes a single hull a speck, which is exactly what "it is a bit small"
+    # meant the first time this was looked at.
+    if len(_keys) == 1:
+        visual_camera(_anchor, lens=(0, 60, -260))
+    else:
+        visual_camera(_anchor, lens=(0, 1600, -5800))
 
-    # Judge BY NAME, not by side: the frame is mirrored, so x=-1200 draws on the RIGHT.
     _expect = ~~[
-        "THREE ships in a row - read them by NAME, the frame is mirrored in X",
-        "modart_control is a real TSN hull (positive control)",
-        "modart_bare is the placeholder sphere (negative control)",
-        "those two must LOOK DIFFERENT, or this specimen proves nothing",
-        "modart_relpath is the answer: a winged craft = a mod CAN carry its own art",
-        "modart_relpath as a placeholder = artfileroot cannot leave data/graphics/ships",
-        "MEASURED so far: placeholder. This is a regression guard for the engine change.",
+        "TEN ships in a row - read them by NAME, the frame is mirrored in X",
+        "modart_control_ok is a real TSN hull",
+        "modart_control_bad is the placeholder sphere",
+        "those two must LOOK DIFFERENT, or nothing between them counts",
+        "any variant drawn as a God Phoenix is a spelling that WORKS",
+        "1.3.4 measured: none worked. 1.3.5 added add_extra_ship_data and art_file_path.",
     ]~~
-    visual_case("Mod-carried art", _expect,
-        notes="middle artfileroot = ../../missions/anime_mods/anime_ships/graphics/ships/God_Phoenix",
-        data=f"{_made} of 3 spawned, {_merged} entries declared")
+    visual_case("Mod-carried art: which combination", _expect,
+        notes="absolute, and relative to graphics/ships, mission, data, exe",
+        data=f"{_made} of {len(_keys)} spawned - {_note}")
 
-    # The data half. It can confirm the ships EXIST and were declared - it cannot see art,
-    # which is the whole reason this is a specimen.
-    visual_expect("mod art: all three spawned", _made == 3, f"{_made}/3")
-    visual_expect("mod art: entries declared", _merged is not None and _merged > 0)
+    # The data half can only confirm the ships exist and the loader took. It cannot see
+    # art, which is the entire reason this is a specimen and not a headless probe.
+    visual_expect("mod art: variants loaded", _loaded, _note)
+    visual_expect("mod art: all variants spawned", _made == len(_keys), f"{_made}/{len(_keys)}")
     ->END
