@@ -36,6 +36,10 @@ Reproduced 2/2 in the release build. The controlled comparison is the point: the
 art in its *unstripped* folder, same mission, same code path, renders with no crash. The
 only variable is whether the derived files were already present.
 
+**It is not one file.** Supplying every derived file except one, in turn, crashes on every
+omission — `.paxmesh`, `.pointcube`, `.rawbitmap`, `1024.png`, `256.png` alike. The engine
+cannot generate *any* of them; the complete set has to be present.
+
 Not content-specific — it fails identically on a completely different mesh
 (`anime_mods/anime_ships/graphics/ships/God_Phoenix.obj`), also stopping right after
 writing `God_Phoenix1024.png`.
@@ -48,6 +52,14 @@ Artemis3-x64-release.exe autostartserver defaultmission=VisualTestRange \
 ```
 
 `variant=two_example` is the passing control (their folder, untouched).
+
+## Note on `add_extra_ship_data`
+
+Pass the filename **without an extension** — the engine tries `.yaml` then `.json` itself,
+as your own example does (`sbs.add_extra_ship_data("extraShipDataAAA",
+"data/missions/BeamArcTest")` for a `.json` file). Loading works either way; the
+extensionless form is the one to document, since it lets a mod switch format without the
+caller changing.
 
 ## A second, probably related crash
 

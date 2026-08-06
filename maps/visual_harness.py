@@ -987,7 +987,10 @@ def mod_art_build_and_load():
             e[mod_art_key()] = path.replace("{ships}", ships)
         entries.append(e)
 
-    name = "mod_art_variants.json"
+    # NO EXTENSION on the name handed to add_extra_ship_data - the engine tries .yaml then
+    # .json itself, and their own example passes a bare "extraShipDataAAA" for a .json file.
+    stem = "mod_art_variants"
+    name = stem + ".json"
     try:
         with open(os.path.join(mission, name), "w", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps({"#ship-list": entries}, indent=4) + "\n")
@@ -1000,7 +1003,7 @@ def mod_art_build_and_load():
         return False, "add_extra_ship_data absent - engine older than 1.3.5"
     mod_art_mark("LOADING", ",".join(e["key"] for e in entries))
     try:
-        fn(name, mission.replace("\\", "/"))
+        fn(stem, mission.replace("\\", "/"))
     except Exception as e:
         return False, "add_extra_ship_data raised: " + str(e)
     mod_art_mark("LOADED")
