@@ -1107,6 +1107,18 @@ MOD_ART_PATH_FORMS = {
 
 
 def _mod_art_select(only):
+    # BAKE: spawn one ship by artfileroot ALONE, with the art sitting in data/graphics/ships,
+    # so the engine generates its derived files there. That path does not crash - only
+    # generating into a mod folder does - so it is the workaround while the crash is open:
+    # bake once as the author, then ship the generated files with the mod.
+    #
+    #   variant=bake bakeroot=<artfileroot>
+    if only == "bake":
+        from sbs_utils.procedural.command_line import command_line_get
+        root = (command_line_get("bakeroot") or "").strip()
+        if not root:
+            return []
+        return [("bake", "bake " + root, root, None)]
     # The engine team's shape: BOTH fields, artfilepath a folder. `variant=two_example`.
     if only is not None and only.startswith("two_"):
         name = only[len("two_"):]

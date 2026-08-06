@@ -53,6 +53,39 @@ Artemis3-x64-release.exe autostartserver defaultmission=VisualTestRange \
 
 `variant=two_example` is the passing control (their folder, untouched).
 
+## Second bug: `<root>256.png` is written to the EXE ROOT
+
+The 256 bitmap is generated into the **current working directory** — `F:\Cosmos-1-3-0\`
+— rather than beside the art it belongs to. It lands as a stray `God_Phoenix256.png` /
+`tsn_light_cr256.png` next to the executable.
+
+Two consequences. The art folder never becomes complete on its own, so the next load
+regenerates it and drops another copy in the root; and it made the file look
+*ungeneratable* while investigating, because looking beside the art showed nothing.
+
+## Which files the engine actually generates
+
+Measured while baking art in `data/graphics/ships` (the path that does NOT crash):
+
+| file | generated? | where |
+|---|---|---|
+| `.paxmesh` | yes | beside the art |
+| `.pointcube` | yes | beside the art |
+| `<root>1024.png` | yes | beside the art |
+| `<root>256.png` | yes | **the exe root** (bug above) |
+| `.rawbitmap` | not observed | — |
+
+`.rawbitmap` never appeared under any trigger tried: NPC spawn, player spawn, or repeat
+runs. Art renders correctly without it, so it may be optional or produced by some other
+path.
+
+## The workaround this enables
+
+Until the crash is fixed, a mod's art can be **baked**: put the source art in
+`data/graphics/ships` temporarily, spawn the ship by `artfileroot` alone, let the engine
+generate the derived files, then ship those with the mod and remove the art from the
+install. Confirmed working — the baked hull rendered in-engine.
+
 ## Note on `add_extra_ship_data`
 
 Pass the filename **without an extension** — the engine tries `.yaml` then `.json` itself,

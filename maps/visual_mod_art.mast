@@ -47,11 +47,19 @@ type: visual/mod_art
     # generated at run time: an absolute path committed to a repo is wrong on every other
     # machine.
     _loaded, _note = mod_art_build_and_load()
+    _bake_player = command_line_get("bakeplayer") is not None
 
     _keys = mod_art_variant_keys()
     _gap = 1100
     _made = 0
     _x0 = 0 - (len(_keys) - 1) * _gap / 2
+    # A PLAYER ship, when baking. The three files a plain NPC spawn never produces -
+    # .rawbitmap, <root>1024.png, <root>256.png - are the internal-view set, and the engine
+    # appears to build them only when a ship has an interior, i.e. a player ship.
+    if _bake_player:
+        _pb = player_spawn(0, 0, 0, "BAKE", "tsn", _keys[0])
+        mod_art_mark("BAKE PLAYER", _keys[0])
+
     for _vi in range(len(_keys)):
         # Breadcrumb BEFORE the spawn: one of these variants asserts the engine, and an
         # assert writes no report, so the last line in mod_art_progress.txt is the culprit.
