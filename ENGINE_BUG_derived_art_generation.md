@@ -53,6 +53,39 @@ Artemis3-x64-release.exe autostartserver defaultmission=VisualTestRange \
 
 `variant=two_example` is the passing control (their folder, untouched).
 
+## ROOT CAUSE: `.paxmesh` hardcodes texture paths under `data/graphics/`
+
+This is the finding that explains the rest, and it is the specific thing to fix.
+
+A generated `.paxmesh` stores its texture references as length-prefixed strings rooted at
+`data/graphics/`:
+
+```
+ships/<root>_diffuse   ships/<root>_emissive   ships/<root>_normal   ships/<root>_specular
+```
+
+They are resolved from the game's graphics folder — **not from the folder the mesh was
+loaded out of**. So `artfilepath` relocates the MESH but not its TEXTURES, and a mod that
+carries its own art has a mesh whose textures cannot be found.
+
+**`BeamArcTest`'s own art demonstrates it.** Its `tsn_light_cr.paxmesh` contains
+`ships/tsn_light_cruiser_diffuse` — the STOCK cruiser's textures, which are always present
+in the install. That art is the stock cruiser renamed, so it works by borrowing from
+`data/graphics/ships`; it never exercised mod-carried textures at all.
+
+Confirmed by construction: with the God Phoenix mesh in a mod folder and only its four
+textures copied into `data/graphics/ships`, it loads. Remove them and it fails.
+
+**The ask:** make paxmesh texture lookup honor `artfilepath`, or store texture paths
+relative to the mesh.
+
+### Still unexplained
+
+With the COMPLETE art set installed in `data/graphics/ships` — byte-identical copies in
+both locations — `BeamArcTest` still **hangs** rather than rendering. The same art loads
+fine through `VisualTestRange`. That difference is not accounted for here, and the earlier
+crash-versus-hang distinction should not be read as meaningful until it is.
+
 ## Second bug: `<root>256.png` is written to the EXE ROOT
 
 The 256 bitmap is generated into the **current working directory** — `F:\Cosmos-1-3-0\`
