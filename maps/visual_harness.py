@@ -1085,6 +1085,10 @@ MOD_ART_TWO_FIELD = {
     "example":      ("tsn_light_cr",    "data/missions/BeamArcTest/extraShipGraphicData"),
     "anime_exe":    ("God_Phoenix",     "data/missions/anime_mods/anime_ships/graphics/ships"),
     "anime_abs":    ("God_Phoenix",     "{ships}"),
+    # The SAME art with its mesh flattened to one object / one material. God_Phoenix.obj is
+    # a 16-object, 16-material Blender export; every mesh the engine ships is 1/1. This is
+    # the discriminator for whether the loader handles multi-object OBJ at all.
+    "anime_flat":   ("God_Phoenix_flat", "data/missions/anime_mods/anime_ships/graphics/ships"),
     # THE DISCRIMINATOR for the render crash. The engine's OWN art, copied into a mod
     # folder with the derived files (.paxmesh .pointcube .rawbitmap 1024 256) stripped, so
     # the engine has to generate them exactly as it must for any real mod.
