@@ -1060,6 +1060,18 @@ MOD_ART_ORACLES = (
 # artfileroot stays VALID in every close-up, so nothing here can hit the unresolvable-art
 # segfault - the ship falls back to a TSN cruiser instead of killing the engine, which is
 # also what makes the readout unambiguous: TSN cruiser = the path did nothing.
+# WHAT A MOD'S ART FOLDER HOLDS
+#
+#   <root>.obj  _diffuse  _emissive  _normal  _specular      authored source
+#   <root>.mtl                                               source too - KEEP IT
+#   .paxmesh  .pointcube  <root>1024.png  <root>256.png      baked (see variant=bake)
+#
+# The engine ignores `.mtl`: its own art references an `artemis.mtl` that is not even in
+# the folder. But ignored is not unwanted - the meshes are Blender exports carrying an
+# `mtllib` line, so anyone reopening the source art in Blender needs it. Source art and
+# shipped art are different sets, and the engine's needs are only half the story.
+
+
 # THE ENGINE TEAM'S OWN WORKING EXAMPLE - data/missions/BeamArcTest/extraShipDataAAA.json:
 #
 #     "artfileroot": "tsn_light_cr",
