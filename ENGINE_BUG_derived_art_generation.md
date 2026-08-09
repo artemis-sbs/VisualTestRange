@@ -149,3 +149,50 @@ straight from a mod folder — measured, the engine read `shields [110, 90]` fro
 `anime_mods/anime_ships/mod_ships.json` with nothing written into the mission. And
 `artfilepath` + `artfileroot` does reach a mod's art: the crash above is *proof* it got
 there, since the engine wrote a generated file into the mod folder before dying.
+
+## RE-MEASURED on the 2026-08-05 dev build — still open, and now WORSE
+
+Re-run of the same reproducer against `Artemis3-x64-release.exe` dated 2026-08-05.
+Every run below is the release build, launched from the exe folder, 75s timeout.
+
+| run | variant | art | exit | verdict |
+|---|---|---|---|---|
+| control | `map=visual_motion` | stock only | 124 (timed out = alive) | engine is healthy |
+| **`two_example`** | BeamArcTest's own **complete** set | `artfilepath` | **139 segfault, 2/2** | **REGRESSION** |
+| `two_gen_test` | stripped to source | `artfilepath` | 139 segfault | bug unchanged |
+| `bake` | source in `data/graphics/ships` | `artfileroot` only | 124 (alive) | workaround still works |
+
+Two things changed since the 1.3.5 measurement above.
+
+**1. The passing control no longer passes.** `two_example` is the engine team's OWN art
+with the full derived set (`.paxmesh .pointcube .rawbitmap 1024 256`) in a mod folder — the
+case this document recorded as rendering fine. On this build it segfaults, reproduced 2/2.
+So `artfilepath` art is now fatal *regardless* of whether the derived files are present,
+which is a strictly larger failure than "generation crashes". There is no longer any
+combination that reaches a mod's own meshes.
+
+Both crashes die at the same place in the log: the engine parses the `.obj`
+(`find materials in: <folder>/artemis.mtl`, then vertices/texcoords/normals/triangles up to
+`material17`) and dies there. Note it parses the OBJ even in `two_example`, where a
+`.paxmesh` sits beside it.
+
+**2. `two_gen_test` is otherwise unchanged** — it writes `tsn_light_cr1024.png` into the mod
+folder and then dies, exactly as described above.
+
+**The bake workaround is intact.** `variant=bake bakeroot=tsn_light_cr bakeplayer=1` with the
+source art staged in `data/graphics/ships` ran the full 75s and generated `.paxmesh` and
+`.pointcube` beside the art, plus `tsn_light_cr256.png` in the exe root (the second bug,
+also unchanged). `.rawbitmap` and `1024.png` did not appear on this run.
+
+So today the ONLY way a mod's custom hull renders is to install its art into
+`data/graphics/ships` — which, combined with the paxmesh texture-path root cause above,
+means mod-carried art is not shippable at all until the engine side is fixed.
+
+### One thing worth checking on the engine side
+
+`script_documentation.txt` documents `art_file_path` / `art_file_root` only as **`sbs.hullmap`**
+data descriptors — "used to get top-down image from disk", i.e. the interior grid's top-down
+picture, not the 3D mesh. The ship-data key `artfilepath` that `extraShipDataAAA.json` uses is
+not documented anywhere in that file. Whether those are the same plumbing or two unrelated
+fields with confusingly similar names would be worth confirming before more spellings get
+guessed at from this side.
