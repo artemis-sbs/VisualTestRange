@@ -1,0 +1,131 @@
+# SPECIMEN: the particle layer - every look, toured one at a time, close up.
+#
+# This is the ONLY place any of this can be judged. The cosmos_dev mock draws no
+# particles at all (they are client-render-only), so the unit tests can prove an
+# emitter was created, replaced and deleted, and can prove the ramp arithmetic, but
+# they cannot say whether "smoke" looks like smoke. Everything about the APPEARANCE
+# is decided here, against the real engine, and the preset numbers should be expected
+# to change the first time anyone looks at this.
+#
+# THE CAMERA TOURS, it does not sit wide. The first cut of this specimen framed the
+# whole row at once and the ships were too far away to see anything - the looks run
+# from size 0.6 to 20, and a shot that fits eight hulls in frame cannot resolve the
+# small end at all. So: one hull at a time, close, with the card naming the look on
+# screen. There is a wide establishing shot at the end of each lap for context, and
+# that is the only thing a wide frame is good for here.
+#
+# NOTE the engine spells it "emittor". The library spells its own functions
+# particle_*, so that oddity stops at the API boundary.
+
+@map/visual_particles "Visual: particles"
+" Every look, toured close up, plus the warp charge-up.
+    visual_set_index_by_name("particles")
+    await task_schedule(run_visual_particles)
+    ->END
+
+
+=== run_visual_particles
+metadata: ``` yaml
+type: visual/particles
+```
+    # ATTACHED looks: persistent emitters that live on a hull (shape: hull).
+    _attached = ~~["sparks", "smoke", "hull_glow", "charge", "ember", "smolder", "coolant_leak"]~~
+    # BURST looks: one-shot, no handle, nothing to clean up. Fired on the tour below.
+    _bursts = ~~["pickup", "dust", "scan_ping"]~~
+
+    _gap = 1400
+    _x0 = 0 - (len(_attached) - 1) * _gap / 2
+    _ids = []
+
+    for _i in range(len(_attached)):
+        _name = _attached[_i]
+        _s = to_object(npc_spawn(_x0 + _i * _gap, 0, 0, _name, "tsn", "tsn_light_cruiser", "behav_npcship"))
+        if _s is not None:
+            particle_effect(_s.id, _name)
+            _ids.append(_s.id)
+
+    # The charge-up, set back so it reads as its own subject rather than an eighth
+    # specimen in the row. Tinted a faction red, which is what a side's own Color:
+    # supplies in the Open Universe.
+    _c = to_object(npc_spawn(0, 0, 3000, "warp charge", "tsn", "tsn_battle_cruiser", "behav_npcship"))
+    _bm = to_object(npc_spawn(_x0 - _gap, 0, 1500, "bursts", "tsn", "tsn_light_cruiser", "behav_npcship"))
+
+    # The establishing shot. Every close stop below rides its own subject instead.
+    _anchor = visual_anchor(0, 400, 0)
+    visual_camera(_anchor, lens=(0, 2200, 0 - 7000))
+
+    _expect = ~~[
+        "the camera holds on ONE hull at a time - the card names the look on screen",
+        "smoke is dark and clings to the hull; sparks are bright and fly off fast",
+        "ember and smolder are sparse - they are the ambient ones, so they are cheap",
+        "hull_glow and charge sit ON the plating, not in the space around it",
+        "the last stop winds up over 3.5 seconds - brighter, denser, tighter - then flashes",
+        "a wide shot of the whole row closes each lap",
+        "nothing is emitting from the empty space between ships",
+    ]~~
+    _data = "attached " + str(len(_attached)) + ", burst " + str(len(_bursts)) + ", 5s per stop"
+    visual_case("Particles", _expect, subtitle="the only place the LOOK can be judged", notes="the mock draws no particles - this needs the engine", data=_data, hold=90)
+
+    # Data checks BEFORE the tour is scheduled: task_schedule runs the task's first
+    # step right away, so the charge-up's emitter would be counted here and the row
+    # check would read "8 of 7" - which looks like a bug in the layer rather than in
+    # the assertion.
+    _detail = "live " + str(particle_count()) + " of " + str(len(_attached))
+    visual_expect("particles: every attached preset resolved to an emitter", particle_count() == len(_attached), _detail)
+    visual_expect("particles: inside the budget", particle_count() <= particle_budget())
+    visual_expect("particles: nothing was refused", particle_budget_refused() == 0)
+    visual_expect("particles: every burst preset resolves", particle_preset(_bursts[0]) is not None and particle_preset(_bursts[2]) is not None)
+
+    _tour = ~~{"VP_IDS": _ids, "VP_NAMES": _attached, "VP_CHARGE": to_id(_c), "VP_MARK": to_id(_bm), "VP_BURSTS": _bursts, "VP_WIDE": to_id(_anchor)}~~
+    task_schedule(visual_particles_tour, _tour)
+    ->END
+
+
+# The tour. Rides each hull in turn at a close standoff, then the bursts, then the
+# charge-up, then a wide shot - forever, so a viewer never has to catch anything at
+# the right moment.
+#
+# Each stop pins the camera to its SUBJECT with dolly == target (two different ids
+# draw a black frame), at a non-zero offset - pinning a ship at zero puts the lens
+# inside its hull mesh.
+=== visual_particles_tour
+    default VP_IDS = None
+    default VP_NAMES = None
+    default VP_CHARGE = 0
+    default VP_MARK = 0
+    default VP_BURSTS = None
+    default VP_WIDE = 0
+    ->END if VP_IDS is None
+    _bi = 0
+
+--- vp_lap
+    for _k in range(len(VP_IDS)):
+        ->END if not object_exists(VP_IDS[_k])
+        visual_case_note("on screen: " + VP_NAMES[_k])
+        visual_camera(VP_IDS[_k], lens=(0, 70, 0 - 260))
+        await delay_sim(5)
+
+    # The bursts. One per lap, so they read as an event rather than a blur.
+    if VP_MARK != 0 and VP_BURSTS is not None:
+        visual_case_note("on screen: burst " + VP_BURSTS[_bi % len(VP_BURSTS)])
+        visual_camera(VP_MARK, lens=(0, 90, 0 - 340))
+        await delay_sim(1)
+        particle_burst(VP_MARK, VP_BURSTS[_bi % len(VP_BURSTS)])
+        _bi = _bi + 1
+        await delay_sim(4)
+
+    # The wind-up. Held longer than a static look so the whole 3.5s ramp AND the ring
+    # flash play inside one stop, instead of being cut off halfway.
+    if VP_CHARGE != 0 and object_exists(VP_CHARGE):
+        visual_case_note("on screen: the warp charge-up (coil)")
+        visual_camera(VP_CHARGE, lens=(0, 110, 0 - 420))
+        await delay_sim(1)
+        particle_charge_start(VP_CHARGE, "coil", 3.5, "#cc2244")
+        await delay_sim(6)
+
+    # Establishing shot to close the lap.
+    if VP_WIDE != 0:
+        visual_case_note("on screen: the whole row (wide)")
+        visual_camera(VP_WIDE, lens=(0, 2200, 0 - 7000))
+        await delay_sim(4)
+    jump vp_lap
