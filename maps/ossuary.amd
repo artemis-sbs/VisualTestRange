@@ -50,14 +50,14 @@ Above the gallery - on the plan it sits under it, which is what the height label
 ### [vault](vault)
 ---
 Relic: ossuary
-Chamber: 2700, 0, 2500, 800
+Chamber: 2682, 0, 2482, 800
 Passage to: core 320
 ---
 
 ### [core](core)
 ---
 Relic: ossuary
-Chamber: 4800, 0, 3400, 900
+Chamber: 4651, 0, 3188, 900
 ---
 The deep end: hub, gallery, vault, core.
 
@@ -71,14 +71,14 @@ Straight up from the hub. A vertical shaft is a dot on a top-down plan - read th
 ### [spine](spine)
 ---
 Relic: ossuary
-Chamber: -3000, 0, 0, 600
+Chamber: -3204, 0, -148, 600
 Passage to: crypt 280
 ---
 
 ### [crypt](crypt)
 ---
 Relic: ossuary
-Chamber: -3000, -1600, 0, 700
+Chamber: -6019, -1600, -520, 700
 ---
 Below the ecliptic.
 
@@ -93,7 +93,7 @@ so this is 1800 by 520 by 760.
 ### [the suspended core](core_solid)
 ---
 Relic: ossuary
-Solid: sphere, 0, 0, 0, 320
+Solid: sphere, 32, 0, -39, 320
 ---
 Subtracted from the hub: a mass hanging in the middle of the room you have to fly around.
 
