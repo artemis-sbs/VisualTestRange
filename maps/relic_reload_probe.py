@@ -22,6 +22,14 @@ So COUNTING props proves nothing: per_chamber is fixed, and 654 stale props and 
 ones look identical. The discriminator is IDENTITY - a genuine rebuild shares no object
 with the build before it. Comment out the two `remove_role` calls in `relic_reload` and
 this flips to STALE with an overlap of 654.
+
+AND COUNT THE SIM, NOT THE ROLE. The first version of this probe asked
+`role("relic_wall")`, which the teardown empties before it deletes anything - so it
+reported a clean rebuild while `sim.delete_object` (a method that does not exist) threw
+into a bare `except: pass` and left every old prop in the world. Preview really was
+building the new relic; it was stacking it on all the previous ones. A probe that only
+counts what it just relabelled cannot see that, so this one counts total space objects
+across the reload and requires them to come back to the same number.
 """
 import io
 import os
@@ -55,6 +63,17 @@ _spec.loader.exec_module(relic_layout)
 AMD = os.path.join(HERE, "ossuary.amd")
 
 
+def _object_count():
+    """Every space object the sim still holds - the only view that sees an orphan.
+
+    Roles cannot answer this: the teardown strips the role BEFORE it deletes, so an
+    object whose delete failed is simply invisible to `role(...)` while still very much
+    in the world, and drawn.
+    """
+    from sbs_utils.agent import Agent
+    return len(Agent.all)
+
+
 def _drain():
     """Run the sower out - props are dripped over frames, not spawned inline."""
     for _ in range(400):
@@ -70,11 +89,15 @@ def main():
 
     relic_layout.relic_define()
     relic_layout.relic_dress()
+    # The atmosphere too - the reload rebuilds it, so a baseline without it reports the
+    # nebula as an orphan and the probe accuses the teardown of a leak it did not cause.
+    relic_layout.relic_atmosphere()
     _drain()
     vol = volume_get(relic_layout.VOLUME)
     before = set(role("relic_wall"))
-    print("build   : chambers=%d  hub r=%s  walls=%d"
-          % (len(vol.chambers), vol.chambers["hub"][3], len(before)))
+    live0 = _object_count()
+    print("build   : chambers=%d  hub r=%s  walls=%d  objects=%d"
+          % (len(vol.chambers), vol.chambers["hub"][3], len(before), live0))
 
     original = io.open(AMD, encoding="utf-8", newline="").read()
     edited = original.replace("Chamber: 0, 0, 0, 900", "Chamber: 0, 0, 0, 1450", 1)
@@ -91,10 +114,13 @@ def main():
     vol = volume_get(relic_layout.VOLUME)
     after = set(role("relic_wall"))
     overlap = len(before & after)
-    print("after   : chambers=%d  hub r=%s  walls=%d"
-          % (len(vol.chambers), vol.chambers["hub"][3], len(after)))
+    live1 = _object_count()
+    print("after   : chambers=%d  hub r=%s  walls=%d  objects=%d"
+          % (len(vol.chambers), vol.chambers["hub"][3], len(after), live1))
     print("props   : shared with the previous build = %d" % overlap)
-    ok = vol.chambers["hub"][3] == 1450 and after and overlap == 0
+    print("orphans : %+d objects left behind by the teardown" % (live1 - live0))
+    ok = (vol.chambers["hub"][3] == 1450 and after and overlap == 0
+          and live1 == live0)
     print("VERDICT : %s" % ("REBUILT" if ok else "STALE"))
     return 0 if ok else 1
 

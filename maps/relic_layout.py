@@ -292,9 +292,9 @@ def relic_reload():
     Deletes by ID, never by object: `delete_object` frees the C++ side synchronously, so
     a live object reference in the loop is a use-after-free waiting to happen.
     """
-    from sbs_utils.helpers import FrameContext
     from sbs_utils.procedural.query import to_object_list
     from sbs_utils.procedural.roles import remove_role
+    from sbs_utils.procedural.space_objects import delete_object
     from sbs_utils.procedural.volume import volume_unwatch
     walls = to_object_list(role("relic_wall"))
     atmos = to_object_list(role("relic_atmos"))
@@ -311,12 +311,15 @@ def relic_reload():
     # walls, whatever the collector has got round to.
     remove_role(walls, "relic_wall")
     remove_role(atmos, "relic_atmos")
-    sim = FrameContext.context.sim
-    for i in ids:
-        try:
-            sim.delete_object(i)
-        except Exception:
-            pass
+    # `sim.delete_object` DOES NOT EXIST - deletion is sbs.delete_object(id), and the
+    # library wrapper is procedural.space_objects.delete_object. The old call raised
+    # AttributeError into a bare `except: pass`, so nothing was ever deleted. While the
+    # identity guards were also broken that was invisible; once they worked, every
+    # Preview stacked another 654 props on top of the last ones.
+    #
+    # Which is the lesson: a swallowed exception around a call you have not verified
+    # turns a typo into a silent behavior change two fixes away.
+    delete_object(set(ids))
     volume_unwatch(VOLUME)
     # The dressing guards on identity (`if the props are here, do nothing`), and the
     # props are now gone - so these rebuild rather than no-op.
