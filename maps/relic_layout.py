@@ -294,9 +294,23 @@ def relic_reload():
     """
     from sbs_utils.helpers import FrameContext
     from sbs_utils.procedural.query import to_object_list
+    from sbs_utils.procedural.roles import remove_role
     from sbs_utils.procedural.volume import volume_unwatch
-    ids = [o.id for o in to_object_list(role("relic_wall"))]
-    ids += [o.id for o in to_object_list(role("relic_atmos"))]
+    walls = to_object_list(role("relic_wall"))
+    atmos = to_object_list(role("relic_atmos"))
+    ids = [o.id for o in walls] + [o.id for o in atmos]
+    # DROP THE ROLES FIRST, in this frame. `delete_object` frees the engine object, but
+    # the AGENT - and so its role membership - lives until GarbageCollector.collect()
+    # runs at the end of cosmos_event_handler. We are still inside the emit, so
+    # `role("relic_wall")` would answer with the objects we just deleted, and the
+    # identity guards in relic_dress / relic_atmosphere would read that as "already
+    # built" and rebuild NOTHING. The preview then showed the OLD relic and looked like
+    # the file had been ignored.
+    #
+    # Removing the role is also the honest statement: these are no longer the relic's
+    # walls, whatever the collector has got round to.
+    remove_role(walls, "relic_wall")
+    remove_role(atmos, "relic_atmos")
     sim = FrameContext.context.sim
     for i in ids:
         try:
