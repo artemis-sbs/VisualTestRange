@@ -282,6 +282,37 @@ def relic_place_players():
     set_pos(role("__player__"), 0, 0, 250)
 
 
+def relic_reload():
+    """Tear the relic down and rebuild it from the file. The live-preview hook.
+
+    Edit ossuary.amd in VS Code, hit Preview, and the running session rebuilds - no
+    restart, no reload of the mission. That closes the loop the whole declarative layer
+    was for: the file IS the relic, so re-reading the file IS rebuilding it.
+
+    Deletes by ID, never by object: `delete_object` frees the C++ side synchronously, so
+    a live object reference in the loop is a use-after-free waiting to happen.
+    """
+    from sbs_utils.helpers import FrameContext
+    from sbs_utils.procedural.query import to_object_list
+    from sbs_utils.procedural.volume import volume_unwatch
+    ids = [o.id for o in to_object_list(role("relic_wall"))]
+    ids += [o.id for o in to_object_list(role("relic_atmos"))]
+    sim = FrameContext.context.sim
+    for i in ids:
+        try:
+            sim.delete_object(i)
+        except Exception:
+            pass
+    volume_unwatch(VOLUME)
+    # The dressing guards on identity (`if the props are here, do nothing`), and the
+    # props are now gone - so these rebuild rather than no-op.
+    relic_define()
+    made = relic_dress()
+    atmos = relic_atmosphere()
+    relic_report()
+    return f"relic reloaded: {made} props, {atmos} nebula"
+
+
 def relic_report():
     """Write what actually got built to a file beside the mission.
 

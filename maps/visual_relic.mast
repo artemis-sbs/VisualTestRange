@@ -149,6 +149,15 @@ type: visual/relic_chamber
     ->END
 
 
+# LIVE PRELOAD. The VS Code relic editor posts this signal to a running `sbs debug`
+# session, so editing the .amd and hitting Preview rebuilds the relic in place - no
+# restart. //shared so it runs ONCE on the server rather than once per console.
+//shared/signal/relic_reload
+    _msg = relic_reload()
+    log(_msg, "relic")
+    volume_watch("relic", margin=60, block_jump=True)
+
+
 # The consequence of scraping a wall is the MISSION's call - volume.py only reports it.
 # //shared so these run ONCE on the server rather than once per connected console.
 //shared/signal/volume_scrape
