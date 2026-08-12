@@ -141,6 +141,10 @@ type: visual/relic_chamber
     # block_jump is engine-verified - it really does refuse the drive.
     volume_watch("relic", margin=60, block_jump=True)
 
+    # A FILE, not a log line: log() to a named logger never reaches mast.runtime.log and
+    # engine print() goes nowhere readable, so this is the only way an unattended engine
+    # run can show the relic actually BUILT rather than merely failed to crash.
+    relic_report()
     log(f"relic: {_props} props, {_atmos} nebula, containment live", "relic")
     ->END
 

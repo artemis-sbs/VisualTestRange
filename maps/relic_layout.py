@@ -282,6 +282,41 @@ def relic_place_players():
     set_pos(role("__player__"), 0, 0, 250)
 
 
+def relic_report():
+    """Write what actually got built to a file beside the mission.
+
+    A FILE, because that is the only channel that survives an engine run: `log()` to a
+    named logger never reaches mast.runtime.log and engine `print()` goes to an
+    uncaptured stdout. Without this an engine run can only show that nothing CRASHED -
+    and a relic that silently built nothing looks exactly the same.
+    """
+    import os
+    from sbs_utils.fs import get_mission_dir
+    from sbs_utils.procedural.volume import volume_get
+    vol = volume_get(VOLUME)
+    lines = ["relic build report", ""]
+    if vol is None:
+        lines.append("NO VOLUME - the relic did not build")
+    else:
+        (c, rad) = vol.bound()
+        lines.append(f"source        {RELIC_FILE}")
+        lines.append(f"chambers      {len(vol.chambers)}")
+        lines.append(f"passages      {len(vol.passages)}")
+        lines.append(f"boxes         {len(vol.boxes)}")
+        lines.append(f"solids        {len(vol.solids)}")
+        lines.append(f"wall props    {relic_prop_count()}")
+        lines.append(f"nebula        {relic_atmos_count()}")
+        lines.append(f"across        {rad * 2:.0f} u")
+    text = chr(10).join(lines) + chr(10)
+    try:
+        with open(os.path.join(get_mission_dir(), "relic_report.txt"), "w",
+                  encoding="utf-8") as f:
+            f.write(text)
+    except Exception:
+        pass
+    return text
+
+
 def relic_prop_count():
     """How many wall props exist. Used by the demo's own reporting."""
     return len(role("relic_wall"))

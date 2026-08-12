@@ -12,3 +12,4 @@ art_gen_test/*256.png
 art_gen_test/*.paxmesh
 art_gen_test/*.pointcube
 art_gen_test/*.rawbitmap
+relic_report.txt
