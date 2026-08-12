@@ -20,13 +20,13 @@ not - which is exactly why it looked like Preview was ignored rather than broken
 
 So COUNTING props proves nothing: per_chamber is fixed, and 654 stale props and 654 fresh
 ones look identical. The discriminator is IDENTITY - a genuine rebuild shares no object
-with the build before it. Comment out the two `remove_role` calls in `relic_reload` and
-this flips to STALE with an overlap of 654.
+with the build before it. Point `relic_reload` back at `sim.delete_object` and this
+flips to STALE with 595 orphans.
 
 AND COUNT THE SIM, NOT THE ROLE. The first version of this probe asked
-`role("relic_wall")`, which the teardown empties before it deletes anything - so it
-reported a clean rebuild while `sim.delete_object` (a method that does not exist) threw
-into a bare `except: pass` and left every old prop in the world. Preview really was
+`role("relic_wall")`, which a genuine delete empties immediately - so it reported a
+clean rebuild while `sim.delete_object` (a method that does not exist) threw into a bare
+`except: pass` and left every old prop in the world. Preview really was
 building the new relic; it was stacking it on all the previous ones. A probe that only
 counts what it just relabelled cannot see that, so this one counts total space objects
 across the reload and requires them to come back to the same number.
@@ -66,9 +66,8 @@ AMD = os.path.join(HERE, "ossuary.amd")
 def _object_count():
     """Every space object the sim still holds - the only view that sees an orphan.
 
-    Roles cannot answer this: the teardown strips the role BEFORE it deletes, so an
-    object whose delete failed is simply invisible to `role(...)` while still very much
-    in the world, and drawn.
+    Roles cannot answer this on their own: a rebuild re-populates `relic_wall` to the
+    same count either way, so the old props are only visible as a rise in the total.
     """
     from sbs_utils.agent import Agent
     return len(Agent.all)

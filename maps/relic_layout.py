@@ -292,34 +292,25 @@ def relic_reload():
     Deletes by ID, never by object: `delete_object` frees the C++ side synchronously, so
     a live object reference in the loop is a use-after-free waiting to happen.
     """
-    from sbs_utils.procedural.query import to_object_list
-    from sbs_utils.procedural.roles import remove_role
     from sbs_utils.procedural.space_objects import delete_object
     from sbs_utils.procedural.volume import volume_unwatch
-    walls = to_object_list(role("relic_wall"))
-    atmos = to_object_list(role("relic_atmos"))
-    ids = [o.id for o in walls] + [o.id for o in atmos]
-    # DROP THE ROLES FIRST, in this frame. `delete_object` frees the engine object, but
-    # the AGENT - and so its role membership - lives until GarbageCollector.collect()
-    # runs at the end of cosmos_event_handler. We are still inside the emit, so
-    # `role("relic_wall")` would answer with the objects we just deleted, and the
-    # identity guards in relic_dress / relic_atmosphere would read that as "already
-    # built" and rebuild NOTHING. The preview then showed the OLD relic and looked like
-    # the file had been ignored.
+    from sbs_utils.procedural.roles import role as _role
+    ids = set(_role("relic_wall")) | set(_role("relic_atmos"))
+    # `sim.delete_object` DOES NOT EXIST. Deletion is `sbs.delete_object(id)`, wrapped by
+    # procedural.space_objects.delete_object. The call this replaces named the method on
+    # the SIMULATION and sat inside a bare `except: pass`, so it raised AttributeError
+    # and deleted nothing - for as long as this file has existed. That was invisible
+    # while it merely meant "the relic never changes"; the moment reload worked, every
+    # Preview stacked another 600 props on top of the last set.
     #
-    # Removing the role is also the honest statement: these are no longer the relic's
-    # walls, whatever the collector has got round to.
-    remove_role(walls, "relic_wall")
-    remove_role(atmos, "relic_atmos")
-    # `sim.delete_object` DOES NOT EXIST - deletion is sbs.delete_object(id), and the
-    # library wrapper is procedural.space_objects.delete_object. The old call raised
-    # AttributeError into a bare `except: pass`, so nothing was ever deleted. While the
-    # identity guards were also broken that was invisible; once they worked, every
-    # Preview stacked another 654 props on top of the last ones.
+    # The lesson is the swallowed exception, not the typo: an `except` around a call
+    # nobody verified turns a misspelling into a silent behavior change two fixes away.
     #
-    # Which is the lesson: a swallowed exception around a call you have not verified
-    # turns a typo into a silent behavior change two fixes away.
-    delete_object(set(ids))
+    # `delete_object` tombstones the agent SYNCHRONOUSLY (destroyed() runs before the
+    # deferred engine free), so the roles are gone the moment this returns - which is
+    # exactly what the identity guards below need. Nothing extra is required to clear
+    # them, and relic_reload_probe.py measures that: 0 shared objects, 0 orphans.
+    delete_object(ids)
     volume_unwatch(VOLUME)
     # The dressing guards on identity (`if the props are here, do nothing`), and the
     # props are now gone - so these rebuild rather than no-op.
