@@ -1,0 +1,157 @@
+# SPECIMENS: the relic interior - a structure a ship flies INSIDE.
+#
+# These exist because the design's remaining questions are ones only an eye settles.
+# The engine has exactly one collision primitive (exclusion_radius, a keep-out sphere),
+# so a hollow structure cannot be built out of solids; sbs_utils/procedural/volume.py
+# models the navigable VOID instead - chambers are spheres, passages are capsules, and
+# containment is script-side, so engine collision plays no part.
+#
+# Every prop here is TERRAIN with exclusion_radius 0: visible, not solid. That makes the
+# walls PURELY presentational - delete them and containment behaves identically - which
+# is exactly why they need a specimen. Their whole job is to make an invisible boundary
+# legible, and only a picture can say whether they do.
+#
+# Three specimens, in the order the questions matter:
+#
+#   visual_relic_inside    Does the engine draw a mesh from INSIDE it? THE gate for the
+#                          whole design. It passed on engine 1.3.5, so this is now a
+#                          REGRESSION: an engine that started backface-culling would
+#                          silently turn every relic into an empty void.
+#   visual_relic_chamber   Does a SHELL OF PROPS read as a room? The framed still.
+#   visual_relic_fly       The whole relic, flyable, for the half a still cannot show:
+#                          whether being caught by the containment tractor FEELS like a
+#                          wall or like a rubber band.
+
+import maps/relic_layout.py
+
+
+# ------------------------------------------------------------------ mesh from inside
+#
+# Two rocks, one you sit inside. Passive TERRAIN on purpose: an AI behavior carrying
+# exclusion_radius 0 NaNs the engine and asserts (measured 1.3.5 - Simulation.cpp:739
+# and SpaceObjectAITyphon.cpp:111), which cost two crashes to learn.
+=== run_visual_relic_inside
+metadata: ``` yaml
+type: visual/relic_inside
+```
+    _big = terrain_spawn(0, 0, 0, "INSIDE-ME", "#,relic", "plain_asteroid_6", "behav_asteroid")
+    _big.blob.set("local_scale_x_coeff", 400.0, 0)
+    _big.blob.set("local_scale_y_coeff", 400.0, 0)
+    _big.blob.set("local_scale_z_coeff", 400.0, 0)
+    _big.engine_object.exclusion_radius = 0
+
+    # A quarter the scale, seen only from outside - the control, so "nothing inside,
+    # something outside" is a culling verdict rather than a spawn failure.
+    _mid = terrain_spawn(9000, 0, 0, "LOOK-AT-ME 100x", "#,relic", "plain_asteroid_6", "behav_asteroid")
+    _mid.blob.set("local_scale_x_coeff", 100.0, 0)
+    _mid.blob.set("local_scale_y_coeff", 100.0, 0)
+    _mid.blob.set("local_scale_z_coeff", 100.0, 0)
+    _mid.engine_object.exclusion_radius = 0
+
+    # The camera sits INSIDE the big rock, off-centre. Off-centre matters: a lens exactly
+    # on its look-at point renders a black frame.
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, lens=(0, 250, 0 - 900), look=(0, 0, 1200))
+
+    _expect = ~~[
+        "the frame is FILLED with rock surface - you are inside the mesh looking at its inner faces",
+        "it is NOT empty space and NOT a black frame",
+        "the smaller control rock is visible far off to the right, as a solid rock from outside",
+    ]~~
+    visual_case("Relic: mesh from inside", _expect,
+                notes="both rocks are exclusion_radius 0 - visible, not solid",
+                data="if the inside is empty the engine backface-culls, and no enclosing geometry can ever be flown into")
+    visual_expect("relic_inside: big rock spawned", to_object(_big) is not None)
+    visual_expect("relic_inside: control rock spawned", to_object(_mid) is not None)
+    ->END
+
+@map/visual_relic_inside "Visual: relic mesh from inside"
+" Camera inside a 400x rock. Does the hull draw from within?
+    visual_set_index_by_name("relic_inside")
+    await task_schedule(run_visual_relic_inside)
+    ->END
+
+
+# ---------------------------------------------------------------- a chamber, framed
+#
+# The question a still can answer: does a scattered shell of ordinary-scale props read as
+# an enclosing room? A single mesh scaled up to room size does NOT - measured by eye, 80x
+# reads as "more of a tunnel than a room", and one blown-up mesh has poor texel density
+# and one obvious repeated silhouette. So the volume defines the space and props dress
+# its boundary.
+=== run_visual_relic_chamber
+metadata: ``` yaml
+type: visual/relic_chamber
+```
+    relic_define()
+    _props = relic_dress()
+    _atmos = relic_atmosphere()
+
+    # Sit inside the hub, looking across it at the far wall - and at the suspended core
+    # sphere, which is a SUBTRACTED solid: space carved OUT of the room. A subtracted
+    # shape must be dressed or it is an invisible obstacle.
+    _anchor = visual_anchor(0, 0, 0 - 700)
+    visual_camera(_anchor, lens=(0, 120, 0 - 260), look=(0, 0, 900))
+
+    _expect = ~~[
+        "a rocky wall CURVES away around the frame - it reads as being inside a chamber, not beside a rock pile",
+        "the suspended core sphere is visible ahead as a distinct clustered mass",
+        "purple nebula haze fills the space - thin enough to still see the walls",
+        "gaps between props do NOT show open starfield straight through the wall",
+    ]~~
+    visual_case("Relic: chamber interior", _expect,
+                notes="a chamber is a SHELL OF PROPS on the volume boundary, never one scaled mesh",
+                data=f"{_props} wall props, {_atmos} nebula; hub radius 900 with a subtracted 320 core")
+    visual_expect("relic_chamber: props built", _props > 0)
+    visual_expect("relic_chamber: atmosphere built", _atmos > 0)
+    visual_expect("relic_chamber: hub is navigable", volume_contains("relic", (0, 0, 700)))
+    visual_expect("relic_chamber: core is solid", not volume_contains("relic", (0, 0, 0)))
+    ->END
+
+@map/visual_relic_chamber "Visual: relic chamber interior"
+" Inside the hub. Does a shell of props read as a room?
+    visual_set_index_by_name("relic_chamber")
+    await task_schedule(run_visual_relic_chamber)
+    ->END
+
+
+# ------------------------------------------------------------------- the whole relic
+#
+# NOT a framed still, on purpose. Containment FEEL is the one thing a picture cannot
+# carry: whether the tractor reads as being caught by a wall or as a rubber band. It was
+# a rubber band when the hold was a per-tick set_pos teleport - correct on the server and
+# visibly wrong on the client, which predicts its own position. An engine-side tractor
+# fixed that, and this map is where you confirm it stayed fixed.
+#
+#     python sbs.pyz run Server,helm -m VisualTestRange map=visual_relic_fly
+#
+# player_spawn directly, not spawn_players: this range loads LM `consoles` and `prefabs`
+# but NOT `fleets`, so spawn_players does not exist here.
+@map/visual_relic_fly "Visual: relic FLY IT"
+" Eight chambers, a built hall, a pillar. Fly at a wall and see what catches you.
+    relic_define()
+    _p = player_spawn(0, 0, 700, "Relic", "tsn", "tsn_light_cruiser")
+    _props = relic_dress()
+    _atmos = relic_atmosphere()
+    relic_place_players()
+
+    # margin 60 = one tick of warp travel, so a held ship sits clear of the wall rather
+    # than on the boundary it just crossed. No speed_limit: the nebula makes the ENGINE
+    # cap warp, which needs no per-tick throttle writes and nothing for the helm to fight.
+    # block_jump is engine-verified - it really does refuse the drive.
+    volume_watch("relic", margin=60, block_jump=True)
+
+    log(f"relic: {_props} props, {_atmos} nebula, containment live", "relic")
+    ->END
+
+
+# The consequence of scraping a wall is the MISSION's call - volume.py only reports it.
+# //shared so these run ONCE on the server rather than once per connected console.
+//shared/signal/volume_scrape
+    log(f"relic scrape: {id} at depth {depth}", "relic")
+
+//shared/signal/volume_breach
+    log(f"relic breach: {id} at depth {depth} - held", "relic")
+
+//shared/signal/volume_recovered
+    log(f"relic recovered: {id}", "relic")

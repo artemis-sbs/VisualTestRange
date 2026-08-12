@@ -28,6 +28,7 @@ import maps/visual_planet.mast
 import maps/visual_torpedo.mast
 import maps/visual_beam_arcs.mast
 import maps/visual_fx_client_scope.mast
+import maps/visual_relic.mast
 import maps/visual_terrain_field.mast
 import maps/visual_scale_ladder.mast
 import maps/visual_nebula.mast
