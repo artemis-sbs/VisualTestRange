@@ -2,34 +2,30 @@
 
 Run it:  python maps/relic_reload_probe.py
 
-Not a unittest: it needs a real Cosmos install (shipData) and this mission's folder, so
-it would fail in sbs_utils' suite for reasons that have nothing to do with the relic. It
-lives here for the same reason LM_TestRange keeps `relic_engine_probe.py` - a run you can
-repeat, next to the thing it measures.
+Not a unittest: it needs a real Cosmos install (shipData) and this mission's folder, so it
+would fail in sbs_utils' suite for reasons that have nothing to do with the relic. It lives
+here for the same reason LM_TestRange keeps `relic_engine_probe.py` - a run you can repeat,
+next to the thing it measures.
 
-WHAT IT CATCHES. `relic_dress` and `relic_atmosphere` guard on IDENTITY - if the walls
-are already here, do nothing - which is what keeps a double-launched @map from building
-the relic twice. But `delete_object` frees the engine object while the AGENT, and so its
-role membership, lives until GarbageCollector.collect() runs at the end of
-cosmos_event_handler. A reload runs INSIDE the emit, so it deleted 654 props and then
-asked `role("relic_wall")`, which still answered 654. The guards read that as "already
-built", rebuilt nothing, and Preview showed the OLD relic.
+WHAT IT DRIVES. The two halves of a live preview, in the order the real thing runs them:
+`relic_reload` (the LIBRARY's - re-read the .amd, replace the volume, re-apply the authored
+containment) and then this mission's `relic_rebuilt` art, which is all a relic mission has
+to write. It edits a COPY of ossuary.amd, so it can prove the file is genuinely re-read
+without touching the mission's own asset.
 
-The volume rebuilt correctly the whole time - containment moved, the visible relic did
-not - which is exactly why it looked like Preview was ignored rather than broken.
+WHAT IT CATCHES. `relic_dress` and `relic_atmosphere` guard on IDENTITY - if the walls are
+already here, do nothing - which is what keeps a double-launched @map from building the
+relic twice. Teardown has to actually delete, or the guards see the old props and rebuild
+nothing. Two separate bugs lived in that gap: `sim.delete_object` is not a method (it threw
+into a bare `except: pass`, so nothing was ever deleted), and before that the guards were
+consulted while the deleted agents were still in their roles.
 
-So COUNTING props proves nothing: per_chamber is fixed, and 654 stale props and 654 fresh
-ones look identical. The discriminator is IDENTITY - a genuine rebuild shares no object
-with the build before it. Point `relic_reload` back at `sim.delete_object` and this
-flips to STALE with 595 orphans.
-
-AND COUNT THE SIM, NOT THE ROLE. The first version of this probe asked
-`role("relic_wall")`, which a genuine delete empties immediately - so it reported a
-clean rebuild while `sim.delete_object` (a method that does not exist) threw into a bare
-`except: pass` and left every old prop in the world. Preview really was
-building the new relic; it was stacking it on all the previous ones. A probe that only
-counts what it just relabelled cannot see that, so this one counts total space objects
-across the reload and requires them to come back to the same number.
+So COUNTING props proves nothing: per_chamber is fixed, and 600 stale props and 600 fresh
+ones look identical. Two discriminators are needed and both are here - IDENTITY, because a
+genuine rebuild shares no object with the build before it, and the TOTAL OBJECT COUNT,
+because an object whose delete failed is invisible to `role(...)` while still very much in
+the world and drawn. The first version of this probe had only the roles, and passed while
+every Preview stacked another 595 props on the last set.
 """
 import io
 import os
@@ -52,6 +48,7 @@ from sbs_utils.procedural.roles import role
 from sbs_utils.procedural.volume import volume_get
 from sbs_utils.procedural.terrain import terrain_sow_pending
 from sbs_utils.tickdispatcher import TickDispatcher
+from sbs_utils.procedural.amd_relics import relics_build, relic_reload
 from cosmos_dev.mock import sbs
 
 import importlib.util
@@ -82,35 +79,56 @@ def _drain():
 
 
 def main():
+    import shutil
+    import tempfile
     sbs.create_new_sim()
     FrameContext.context = Context(sbs.sim, sbs, FakeEvent())
     SpaceObject.clear()
 
-    relic_layout.relic_define()
-    relic_layout.relic_dress()
-    # The atmosphere too - the reload rebuilds it, so a baseline without it reports the
-    # nebula as an orphan and the probe accuses the teardown of a leak it did not cause.
-    relic_layout.relic_atmosphere()
-    _drain()
-    vol = volume_get(relic_layout.VOLUME)
-    before = set(role("relic_wall"))
-    live0 = _object_count()
-    print("build   : chambers=%d  hub r=%s  walls=%d  objects=%d"
-          % (len(vol.chambers), vol.chambers["hub"][3], len(before), live0))
-
-    original = io.open(AMD, encoding="utf-8", newline="").read()
-    edited = original.replace("Chamber: 0, 0, 0, 900", "Chamber: 0, 0, 0, 1450", 1)
-    if edited == original:
-        print("SKIP    : the hub's authored radius is not 900 any more - update the probe")
-        return 2
+    # A COPY, so the edit below is a real edit to a real file and the mission's own asset
+    # is never touched. This is what the old probe could not do: it drove a mission
+    # function that read a hard-coded path, so it could only ever show that SOMETHING was
+    # rebuilt, never that the file had been re-read.
+    tmp = tempfile.mkdtemp(prefix="relic_probe_")
+    amd = os.path.join(tmp, "ossuary.amd")
+    shutil.copyfile(AMD, amd)
     try:
-        io.open(AMD, "w", encoding="utf-8", newline="").write(edited)
-        print("reload  :", relic_layout.relic_reload())
-        _drain()
-    finally:
-        io.open(AMD, "w", encoding="utf-8", newline="").write(original)
+        original = io.open(amd, encoding="utf-8", newline="").read()
+        edited = original.replace("Chamber: 0, 0, 0, 900", "Chamber: 0, 0, 0, 1450", 1)
+        if edited == original:
+            print("SKIP    : the hub's authored radius is not 900 any more - update the probe")
+            return 2
 
-    vol = volume_get(relic_layout.VOLUME)
+        rec, vol = relics_build(amd)
+        relic_layout.relic_dress()
+        # The atmosphere too - a re-dress rebuilds it, so a baseline without one reports
+        # the nebula as an orphan and the probe accuses the teardown of a leak it did not
+        # cause.
+        relic_layout.relic_atmosphere()
+        _drain()
+        vol = volume_get(rec.get("key"))
+        before = set(role("relic_wall"))
+        live0 = _object_count()
+        print("build   : chambers=%d  hub r=%s  walls=%d  objects=%d"
+              % (len(vol.chambers), vol.chambers["hub"][3], len(before), live0))
+
+        io.open(amd, "w", encoding="utf-8", newline="").write(edited)
+
+        # HALF ONE - the library's. No mission code; this is what the Preview button gets
+        # for free in any mission that authored a relic in AMD.
+        out = relic_reload(rec.get("key"))
+        print("reload  : %s" % (out,))
+        # HALF TWO - the mission's art, which is what //shared/signal/relic_rebuilt runs.
+        # Called directly here because a probe has no MAST context to emit into.
+        gone = relic_layout.relic_undress()
+        props = relic_layout.relic_dress()
+        atmos = relic_layout.relic_atmosphere()
+        _drain()
+        print("redress : %d removed, %d props, %d nebula" % (gone, props, atmos))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    vol = volume_get(rec.get("key"))
     after = set(role("relic_wall"))
     overlap = len(before & after)
     live1 = _object_count()

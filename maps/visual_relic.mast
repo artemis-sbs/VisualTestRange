@@ -104,8 +104,8 @@ type: visual/relic_chamber
                 data=f"{_props} wall props, {_atmos} nebula; hub radius 900 with a subtracted 320 core")
     visual_expect("relic_chamber: props built", _props > 0)
     visual_expect("relic_chamber: atmosphere built", _atmos > 0)
-    visual_expect("relic_chamber: hub is navigable", volume_contains("relic", (0, 0, 700)))
-    visual_expect("relic_chamber: core is solid", not volume_contains("relic", (0, 0, 0)))
+    visual_expect("relic_chamber: hub is navigable", volume_contains("ossuary", (0, 0, 700)))
+    visual_expect("relic_chamber: core is solid", not volume_contains("ossuary", (0, 0, 0)))
     ->END
 
 @map/visual_relic_chamber "Visual: relic chamber interior"
@@ -129,17 +129,23 @@ type: visual/relic_chamber
 # but NOT `fleets`, so spawn_players does not exist here.
 @map/visual_relic_fly "Visual: relic FLY IT"
 " Eight chambers, a built hall, a pillar. Fly at a wall and see what catches you.
-    relic_define()
+    _rec = relic_define()
     _p = player_spawn(0, 0, 700, "Relic", "tsn", "tsn_light_cruiser")
     _props = relic_dress()
     _atmos = relic_atmosphere()
     relic_place_players()
 
-    # margin 60 = one tick of warp travel, so a held ship sits clear of the wall rather
-    # than on the boundary it just crossed. No speed_limit: the nebula makes the ENGINE
-    # cap warp, which needs no per-tick throttle writes and nothing for the helm to fight.
-    # block_jump is engine-verified - it really does refuse the drive.
-    volume_watch("relic", margin=60, block_jump=True)
+    # Containment from the AUTHORED fields - ossuary.amd already says Containment: tractor,
+    # Margin: 60, Scrape band: 120, Forbid jump: yes, and repeating those numbers here only
+    # created a second place for them to disagree. It also opts this relic into live
+    # containment edits: with relic_contain, changing Margin: in the file takes effect on
+    # the same Preview as moving a chamber.
+    #
+    # Margin 60 is one tick of warp travel, so a held ship sits clear of the wall rather
+    # than on the boundary it just crossed. There is no speed limit: the nebula makes the
+    # ENGINE cap warp, which needs no per-tick throttle writes and nothing for the helm to
+    # fight. Forbid jump is engine-verified - it really does refuse the drive.
+    relic_contain(_rec)
 
     # A FILE, not a log line: log() to a named logger never reaches mast.runtime.log and
     # engine print() goes nowhere readable, so this is the only way an unattended engine
@@ -149,13 +155,25 @@ type: visual/relic_chamber
     ->END
 
 
-# LIVE PRELOAD. The VS Code relic editor posts this signal to a running `sbs debug`
-# session, so editing the .amd and hitting Preview rebuilds the relic in place - no
-# restart. //shared so it runs ONCE on the server rather than once per console.
-//shared/signal/relic_reload
-    _msg = relic_reload()
-    log(_msg, "relic")
-    volume_watch("relic", margin=60, block_jump=True)
+# LIVE PREVIEW, the mission's half of it.
+#
+# Pressing Preview in the VS Code relic plan rebuilds the GEOMETRY with no mission code at
+# all - the library re-reads ossuary.amd, replaces the volume in place, and re-applies the
+# authored containment. Then it emits this, because the props scattered over the walls are
+# THIS mission's art and no library can know what they are.
+#
+# Order matters and is the same order that has always worked: delete our props first, so
+# the identity guards in relic_dress see an empty role and rebuild rather than no-op.
+# Nothing here touches the volume, and nothing re-arms the watcher - a watcher is keyed by
+# volume NAME and re-resolves every tick, so it followed the rebuild by itself.
+#
+# //shared so it runs ONCE on the server rather than once per console.
+//shared/signal/relic_rebuilt
+    _gone = relic_undress()
+    _props = relic_dress()
+    _atmos = relic_atmosphere()
+    relic_report()
+    log(f"relic re-dressed: {_gone} removed, {_props} props, {_atmos} nebula", "relic")
 
 
 # The consequence of scraping a wall is the MISSION's call - volume.py only reports it.

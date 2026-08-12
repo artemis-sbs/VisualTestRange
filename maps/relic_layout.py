@@ -41,7 +41,8 @@ from sbs_utils.procedural.terrain import (
     terrain_set_nebula_object_size,
 )
 
-VOLUME = "relic"
+# The volume name IS the relic's key in ossuary.amd. See relic_define.
+VOLUME = "ossuary"
 
 # The relic. Branching, three-dimensional (the shaft and crypt are off the ecliptic,
 # so this is a dungeon rather than a floor plan).
@@ -73,16 +74,22 @@ _PROP_ART = ("plain_asteroid_6", "plain_asteroid_7", "plain_asteroid_8",
 
 
 def relic_define():
-    """Build the volume from the authored AMD file. Returns it.
+    """Build the volume from the authored AMD file. Returns the RECORD.
 
     One call: `relics_build` loads the document with the relic fence handler wired in,
     walks the section, registers the records and builds the volume. The fence handler is
     the part that is easy to forget - without it every field falls through to the default
     coercion and the relic builds as nothing.
+
+    Building under the relic's OWN key rather than a name of our own is what lets the rest
+    of the library address it: `relic_contain` and the live-preview reload both resolve
+    from the record, and a mission that renames the volume silently opts out of both. That
+    is not hypothetical - while this file passed `name="relic"`, the Ossuary's authored
+    `Scrape band: 120` never once reached its watcher.
     """
     from sbs_utils.fs import get_mission_dir_filename
-    rec, vol = relics_build(get_mission_dir_filename(RELIC_FILE), name=VOLUME)
-    return vol
+    rec, vol = relics_build(get_mission_dir_filename(RELIC_FILE))
+    return rec
 
 
 def _prop(rng, x, y, z, scale):
@@ -282,43 +289,26 @@ def relic_place_players():
     set_pos(role("__player__"), 0, 0, 250)
 
 
-def relic_reload():
-    """Tear the relic down and rebuild it from the file. The live-preview hook.
+def relic_undress():
+    """Delete this mission's relic ART. Returns how many objects went.
 
-    Edit ossuary.amd in VS Code, hit Preview, and the running session rebuilds - no
-    restart, no reload of the mission. That closes the loop the whole declarative layer
-    was for: the file IS the relic, so re-reading the file IS rebuilding it.
+    Geometry is the LIBRARY's job now - `relic_reload` re-reads the .amd and rebuilds the
+    volume with no mission code at all, then emits `relic_rebuilt` so a mission that
+    scatters props over the walls can put them back. This is that half, and it is the only
+    half a relic mission has to write.
 
-    Deletes by ID, never by object: `delete_object` frees the C++ side synchronously, so
-    a live object reference in the loop is a use-after-free waiting to happen.
+    Two things this file learned the hard way, kept here because they are easy to redo:
+    deletion is `space_objects.delete_object`, NOT `sim.delete_object` - the simulation has
+    no such method, and the old call sat inside a bare `except: pass` so it deleted nothing
+    while every Preview stacked another ~600 props on the last set. And `delete_object`
+    tombstones the agent SYNCHRONOUSLY, so `role("relic_wall")` is empty the moment this
+    returns - which is exactly what the identity guards in relic_dress need to rebuild
+    rather than no-op.
     """
     from sbs_utils.procedural.space_objects import delete_object
-    from sbs_utils.procedural.volume import volume_unwatch
-    from sbs_utils.procedural.roles import role as _role
-    ids = set(_role("relic_wall")) | set(_role("relic_atmos"))
-    # `sim.delete_object` DOES NOT EXIST. Deletion is `sbs.delete_object(id)`, wrapped by
-    # procedural.space_objects.delete_object. The call this replaces named the method on
-    # the SIMULATION and sat inside a bare `except: pass`, so it raised AttributeError
-    # and deleted nothing - for as long as this file has existed. That was invisible
-    # while it merely meant "the relic never changes"; the moment reload worked, every
-    # Preview stacked another 600 props on top of the last set.
-    #
-    # The lesson is the swallowed exception, not the typo: an `except` around a call
-    # nobody verified turns a misspelling into a silent behavior change two fixes away.
-    #
-    # `delete_object` tombstones the agent SYNCHRONOUSLY (destroyed() runs before the
-    # deferred engine free), so the roles are gone the moment this returns - which is
-    # exactly what the identity guards below need. Nothing extra is required to clear
-    # them, and relic_reload_probe.py measures that: 0 shared objects, 0 orphans.
+    ids = set(role("relic_wall")) | set(role("relic_atmos"))
     delete_object(ids)
-    volume_unwatch(VOLUME)
-    # The dressing guards on identity (`if the props are here, do nothing`), and the
-    # props are now gone - so these rebuild rather than no-op.
-    relic_define()
-    made = relic_dress()
-    atmos = relic_atmosphere()
-    relic_report()
-    return f"relic reloaded: {made} props, {atmos} nebula"
+    return len(ids)
 
 
 def relic_report():
