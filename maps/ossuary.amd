@@ -1,0 +1,105 @@
+# [The Ossuary](ossuary_doc)
+
+A relic interior authored as data - the same structure `relic_layout.py` builds in
+Python, written the way a mission author would write it.
+
+Open it with **Artemis AMD: Show Relic Plan** to see the floor plan, and drag a chamber
+to move it. Every drag rewrites one line of this file and nothing else, so this prose
+survives being edited around.
+
+## [Relics](relics)
+
+### [The Ossuary](ossuary)
+---
+Loc: 0, 0, 0
+Atmosphere: purple
+Containment: tractor
+Scrape band: 120
+Margin: 60
+Forbid jump: yes
+---
+An ancient thing, hollow, and not built by anyone still alive. Nothing about its shape
+suggests a builder who breathed.
+
+Two rules shape the numbers below: neighbouring chambers stay under ~3500u apart, because
+`render-distance-objects` is 5000 and a wider relic stops drawing its own far side; and
+the whole thing stays under ~11200u across so its atmosphere fits in one nebula.
+
+### [hub](hub)
+---
+Relic: ossuary
+Chamber: 0, 0, 0, 900
+Passage to: gallery 300, shaft 240, spine 300
+---
+Where you arrive. Three ways out.
+
+### [gallery](gallery)
+---
+Relic: ossuary
+Chamber: 3000, 0, 0, 700
+Passage to: annex 240, vault 300
+---
+
+### [annex](annex)
+---
+Relic: ossuary
+Chamber: 3000, 1500, 0, 500
+---
+Above the gallery - on the plan it sits under it, which is what the height label is for.
+
+### [vault](vault)
+---
+Relic: ossuary
+Chamber: 2700, 0, 2500, 800
+Passage to: core 320
+---
+
+### [core](core)
+---
+Relic: ossuary
+Chamber: 4800, 0, 3400, 900
+---
+The deep end: hub, gallery, vault, core.
+
+### [shaft](shaft)
+---
+Relic: ossuary
+Chamber: 0, 2200, 0, 600
+---
+Straight up from the hub. A vertical shaft is a dot on a top-down plan - read the `y`.
+
+### [spine](spine)
+---
+Relic: ossuary
+Chamber: -3000, 0, 0, 600
+Passage to: crypt 280
+---
+
+### [crypt](crypt)
+---
+Relic: ossuary
+Chamber: -3000, -1600, 0, 700
+---
+Below the ecliptic.
+
+### [the long hall](hall)
+---
+Relic: ossuary
+Box: 3600, 0, 2900, 900, 260, 380
+---
+A *built* space - flat walls and real corners, which no sphere can express. Half-extents,
+so this is 1800 by 520 by 760.
+
+### [the suspended core](core_solid)
+---
+Relic: ossuary
+Solid: sphere, 0, 0, 0, 320
+---
+Subtracted from the hub: a mass hanging in the middle of the room you have to fly around.
+
+### [the spine column](spine_solid)
+---
+Relic: ossuary
+Solid: capsule, 0, -2100, 0, 0, 2100, 0, 130
+---
+A column running the height of the shaft. Vertical, so the plan shows it as a disc.

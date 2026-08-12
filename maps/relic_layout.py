@@ -2,12 +2,14 @@
 
 Two things this exists to show.
 
-**The layout is data.** The whole dungeon is the yaml below - eight chambers and
-seven passages. Nothing about the shape is expressed in code, so editing the relic
-means editing a table. (It lives in Python rather than a MAST `metadata:` block only
-because MAST parses line by line and a multi-line literal in a .mast file is the
-silent-cascade trap; the shape is exactly what a metadata block parses to, and
-`volume_load` takes it either way.)
+**The layout is data, and it is not in this file.** The whole dungeon lives in
+`ossuary.amd` - eight chambers, seven passages, a box hall and two subtracted solids.
+This module only DRESSES what that file describes.
+
+It began as a YAML string right here, which is the shape this project keeps converting
+away from: nothing about it was discoverable, lintable, or reachable by tooling. As AMD
+it gets schema-backed fields, `sbs lint` rules, LSP completion and hover, and the VS Code
+relic plan can draw it and drag its chambers.
 
 **A chamber is a SHELL OF PROPS, not one giant mesh.** Measured by eye in the engine:
 a single asteroid scaled 80x reads as "more of a tunnel than a room", and scaling one
@@ -28,12 +30,8 @@ relic whose chambers sit further apart than that stops drawing its own far side.
 import math
 import random
 
-# NOT a bare `import yaml`: the engine's embedded Python has no top-level yaml, and
-# that failed the whole story to compile ("No module named 'yaml'" -> 0 labels).
-# fs.load_yaml_string uses the engine's ryaml (~34x faster) and falls back to the
-# yaml bundled inside sbs_utils.
-from sbs_utils.fs import load_yaml_string
-from sbs_utils.procedural.volume import volume_load, volume_get
+from sbs_utils.procedural.amd_relics import relics_build
+from sbs_utils.procedural.volume import volume_get
 from sbs_utils.procedural.spawn import terrain_spawn
 from sbs_utils.procedural.space_objects import set_pos, clear_target
 from sbs_utils.procedural.roles import role
@@ -56,36 +54,13 @@ VOLUME = "relic"
 #     nebula (a single nebula can be ~12000 with the new shader). That keeps the
 #     atmosphere at one object. The first draft was 13463 across and the `core`
 #     chamber poked out of its own air.
-RELIC_YAML = """
-chambers:
-    hub:     [    0,     0,     0,  900]
-    gallery: [ 3000,     0,     0,  700]
-    annex:   [ 3000,  1500,     0,  500]
-    vault:   [ 2700,     0,  2500,  800]
-    core:    [ 4800,     0,  3400,  900]
-    shaft:   [    0,  2200,     0,  600]
-    spine:   [-3000,     0,     0,  600]
-    crypt:   [-3000, -1600,     0,  700]
-passages:
-    - [hub,     gallery, 300]
-    - [hub,     shaft,   240]
-    - [hub,     spine,   300]
-    - [gallery, annex,   240]
-    - [gallery, vault,   300]
-    - [vault,   core,    320]
-    - [spine,   crypt,   280]
-
-# A BUILT space - flat walls and real corners, which no sphere can express. The long
-# axis runs toward the core, so it reads as a constructed hall rather than a cave.
-boxes:
-    hall: [3600, 0, 2900, 900, 260, 380]
-
-# SUBTRACTED. Union alone can only ADD space; these are the only way to get an
-# obstacle INSIDE a room rather than a room shaped around one.
-solids:
-    - [sphere, 0, 0, 0, 320]                  # a core sphere suspended in the hub
-    - [capsule, [0, -2100, 0], [0, 2100, 0], 130]   # the spine running up the shaft
-"""
+# The relic itself lives in ossuary.amd, NOT here.
+#
+# It used to be a YAML string in this file, which is the shape this project keeps
+# converting away from: nothing about it was discoverable, lintable, or editable by
+# tooling. As AMD it gets schema-backed fields, `sbs lint` checks, LSP completion, and
+# the VS Code relic plan can draw and drag it.
+RELIC_FILE = "maps/ossuary.amd"
 
 # Art with no interior detail of its own reads best as raw rock wall.
 #
@@ -98,8 +73,16 @@ _PROP_ART = ("plain_asteroid_6", "plain_asteroid_7", "plain_asteroid_8",
 
 
 def relic_define():
-    """Define the volume from the yaml. Returns it."""
-    return volume_load(VOLUME, load_yaml_string(RELIC_YAML))
+    """Build the volume from the authored AMD file. Returns it.
+
+    One call: `relics_build` loads the document with the relic fence handler wired in,
+    walks the section, registers the records and builds the volume. The fence handler is
+    the part that is easy to forget - without it every field falls through to the default
+    coercion and the relic builds as nothing.
+    """
+    from sbs_utils.fs import get_mission_dir_filename
+    rec, vol = relics_build(get_mission_dir_filename(RELIC_FILE), name=VOLUME)
+    return vol
 
 
 def _prop(rng, x, y, z, scale):
