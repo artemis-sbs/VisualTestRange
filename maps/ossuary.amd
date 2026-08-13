@@ -7,6 +7,24 @@ Open it with **Artemis AMD: Show Relic Plan** to see the floor plan, and drag a 
 to move it. Every drag rewrites one line of this file and nothing else, so this prose
 survives being edited around.
 
+## [Items](items)
+
+What the ruin holds. An item is defined once, here, and a relic part points at it by key -
+so a typo is a lint error with a line number rather than a beacon that never appears.
+
+### [The Red Beacon](red_beacon)
+---
+Type: item/quest
+Art: unknown
+---
+Still transmitting, after all this time. Somebody wanted to be found.
+
+### [power cell](power_cell)
+---
+Type: item/salvage
+Art: unknown
+---
+
 ## [Relics](relics)
 
 ### [The Ossuary](ossuary)
@@ -109,9 +127,28 @@ Solid: capsule, 0, -2100, 0, 0, 2100, 0, 130
 ### [box 12](box12)
 ---
 Relic: ossuary
-Box: -2266, 700, 3713, 1839, 208, 3176
+Box: -2266, 719, 6560, 1839, 775, 3176
 ---
 A column running the height of the shaft. Vertical, so the plan shows it as a disc.
+
+### [the vault door](vault_door)
+---
+Relic: ossuary
+Point: 2682, 0, 2482
+Roles: vault_door
+---
+What the reliquary is waiting for. `Roles:` on a point puts a real, invisible object here
+when the relic is armed, and `Starts when: reach vault_door 900` measures against it - so
+the Beacon appears the moment a ship comes within 900u of this spot, and not before.
+
+### [the shaft floor](floor)
+---
+Relic: ossuary
+Point: 0, 1600, 0
+Item: power_cell
+Qty: 3
+---
+No `Starts when:`, so this is simply there - the common case, and it needs no word.
 
 ### [the mouth](mouth)
 ---
@@ -127,6 +164,8 @@ something there: a navpoint the crew can steer to, and the spot they arrive at.
 Relic: ossuary
 Point: 4651, 0, 3188
 Roles: item, quest
+Item: red_beacon
+Starts when: reach vault_door 900
 ---
 Something worth the trip, at the far end. Authored RELATIVE to the relic's `Loc:`, so it
 travels with the relic - which is why this is a relic part and not a landmark.

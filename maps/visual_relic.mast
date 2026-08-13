@@ -155,6 +155,19 @@ type: visual/relic_chamber
     _cache = relic_point("ossuary", "cache")
     marker_object(_cache[0], _cache[1], _cache[2], "Reliquary", roles="relic_find")
 
+    # The AUTHORED CONTENTS, in one line. The .amd says the reliquary holds the Red Beacon
+    # and that it appears when a ship reaches the vault door; the shaft floor holds three
+    # power cells with no trigger, so those are placed at once. Arming also puts an
+    # invisible marker on every point carrying `Roles:`, which is what `reach vault_door`
+    # measures against.
+    #
+    # relic_items() first: `Item: red_beacon` is a KEY, and a key with nothing registered
+    # under it spawns the fallback art. The relic reader does not read the Items section -
+    # that is a separate reader, and joining them is the mission's call.
+    relic_items()
+    _waiting = relic_contents_arm("ossuary")
+    log(f"relic: contents armed, {_waiting} waiting on a trigger", "relic")
+
     # A FILE, not a log line: log() to a named logger never reaches mast.runtime.log and
     # engine print() goes nowhere readable, so this is the only way an unattended engine
     # run can show the relic actually BUILT rather than merely failed to crash.

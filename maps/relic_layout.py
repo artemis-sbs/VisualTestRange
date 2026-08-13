@@ -93,6 +93,22 @@ def relic_define():
     return rec
 
 
+def relic_items():
+    """Register the items the .amd declares, so a part's `Item:` key resolves.
+
+    The relic reader deliberately does not do this: `Items` is its own section with its
+    own reader, and a relic loading half of somebody else's document would be surprising
+    the first time a mission put items somewhere else. So the mission joins them, which is
+    one line and visible.
+    """
+    from sbs_utils.fs import get_mission_dir_filename
+    from sbs_utils.procedural.quest import document_get_amd_file
+    from sbs_utils.procedural.amd_doc import amd_section
+    from sbs_utils.procedural.amd_items import items_declare_amd
+    doc = document_get_amd_file(get_mission_dir_filename(RELIC_FILE))
+    return items_declare_amd(amd_section(doc, "items"))
+
+
 def _prop(rng, art_keys, x, y, z, scale):
     """One piece of wall: terrain, non-solid, never an AI behavior."""
     art = art_keys[rng.randrange(len(art_keys))]
@@ -328,6 +344,18 @@ def relic_report():
         lines.append(f"wall props    {relic_prop_count()}")
         lines.append(f"nebula        {relic_atmos_count()}")
         lines.append(f"across        {rad * 2:.0f} u")
+        # CONTENTS, one line each - placed or still waiting, and on what. An engine run
+        # that reports the geometry but not the loot can still be a relic nobody can
+        # finish, which is the failure this half exists to make visible.
+        from sbs_utils.procedural.amd_relics import relic_contents, relic_contents_state
+        got = relic_contents(VOLUME)
+        lines.append(f"contents      {len(got)}")
+        for c in got:
+            what = c.get("item") or ", ".join(c.get("spawn") or []) or "?"
+            qty = f" x{c['qty']}" if (c.get("item") and int(c.get("qty") or 1) > 1) else ""
+            when = c.get("starts_when") or "at once"
+            lines.append(f"  {c['part']:<12} {what}{qty:<4} "
+                         f"[{relic_contents_state(VOLUME, c['part'])}] {when}")
     text = chr(10).join(lines) + chr(10)
     try:
         with open(os.path.join(get_mission_dir(), "relic_report.txt"), "w",
