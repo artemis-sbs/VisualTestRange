@@ -17,6 +17,9 @@ Containment: tractor
 Scrape band: 120
 Margin: 60
 Forbid jump: yes
+Seed: 7
+Art: plain_asteroid_6, plain_asteroid_7, plain_asteroid_8, plain_asteroid_9,
+  plain_asteroid_10, plain_asteroid_11
 ---
 An ancient thing, hollow, and not built by anyone still alive. Nothing about its shape
 suggests a builder who breathed.
@@ -109,3 +112,21 @@ Relic: ossuary
 Box: -2266, 700, 3713, 1839, 208, 3176
 ---
 A column running the height of the shaft. Vertical, so the plan shows it as a disc.
+
+### [the mouth](mouth)
+---
+Relic: ossuary
+Point: -1500, 0, 0
+Roles: entrance
+---
+The way in. A point adds no space of its own - it names a place, and the mission puts
+something there: a navpoint the crew can steer to, and the spot they arrive at.
+
+### [the reliquary](cache)
+---
+Relic: ossuary
+Point: 4651, 0, 3188
+Roles: item, quest
+---
+Something worth the trip, at the far end. Authored RELATIVE to the relic's `Loc:`, so it
+travels with the relic - which is why this is a relic part and not a landmark.

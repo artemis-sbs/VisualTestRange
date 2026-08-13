@@ -99,6 +99,11 @@ def main():
             print("SKIP    : the hub's authored radius is not 900 any more - update the probe")
             return 2
 
+        # Nothing built yet: the baseline a full teardown must return to. Exact, and it
+        # does not care how many props the geometry happens to call for - which an
+        # absolute count now does, since the shell is clipped to the union and a wider
+        # chamber buries a different number of points.
+        empty = _object_count()
         rec, vol = relics_build(amd)
         relic_layout.relic_dress()
         # The atmosphere too - a re-dress rebuilds it, so a baseline without one reports
@@ -121,6 +126,8 @@ def main():
         # HALF TWO - the mission's art, which is what //shared/signal/relic_rebuilt runs.
         # Called directly here because a probe has no MAST context to emit into.
         gone = relic_layout.relic_undress()
+        _drain()
+        stripped = _object_count()
         props = relic_layout.relic_dress()
         atmos = relic_layout.relic_atmosphere()
         _drain()
@@ -135,9 +142,10 @@ def main():
     print("after   : chambers=%d  hub r=%s  walls=%d  objects=%d"
           % (len(vol.chambers), vol.chambers["hub"][3], len(after), live1))
     print("props   : shared with the previous build = %d" % overlap)
-    print("orphans : %+d objects left behind by the teardown" % (live1 - live0))
+    print("orphans : %+d left after the teardown (of %d built)"
+          % (stripped - empty, live0 - empty))
     ok = (vol.chambers["hub"][3] == 1450 and after and overlap == 0
-          and live1 == live0)
+          and stripped == empty)
     print("VERDICT : %s" % ("REBUILT" if ok else "STALE"))
     return 0 if ok else 1
 

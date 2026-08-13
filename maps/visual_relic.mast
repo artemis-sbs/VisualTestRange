@@ -147,6 +147,14 @@ type: visual/relic_chamber
     # fight. Forbid jump is engine-verified - it really does refuse the drive.
     relic_contain(_rec)
 
+    # The AUTHORED places. A point names a spot and nothing more - what goes there is this
+    # mission's call, which is the whole division of labour: the .amd says where, the
+    # mission says what.
+    _mouth = relic_point("ossuary", "mouth")
+    marker_point(_mouth[0], _mouth[1], _mouth[2], "The Ossuary - way in")
+    _cache = relic_point("ossuary", "cache")
+    marker_object(_cache[0], _cache[1], _cache[2], "Reliquary", roles="relic_find")
+
     # A FILE, not a log line: log() to a named logger never reaches mast.runtime.log and
     # engine print() goes nowhere readable, so this is the only way an unattended engine
     # run can show the relic actually BUILT rather than merely failed to crash.

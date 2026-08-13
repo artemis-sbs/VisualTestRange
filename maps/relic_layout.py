@@ -30,8 +30,9 @@ relic whose chambers sit further apart than that stops drawing its own far side.
 import math
 import random
 
-from sbs_utils.procedural.amd_relics import relics_build
-from sbs_utils.procedural.volume import volume_get
+from sbs_utils.procedural.amd_relics import relics_build, relic_record
+from sbs_utils.procedural.volume import (volume_get, volume_surface_points,
+                                          volume_inside_points, volume_solid_points)
 from sbs_utils.procedural.spawn import terrain_spawn
 from sbs_utils.procedural.space_objects import set_pos, clear_target
 from sbs_utils.procedural.roles import role
@@ -92,9 +93,9 @@ def relic_define():
     return rec
 
 
-def _prop(rng, x, y, z, scale):
+def _prop(rng, art_keys, x, y, z, scale):
     """One piece of wall: terrain, non-solid, never an AI behavior."""
-    art = _PROP_ART[rng.randrange(len(_PROP_ART))]
+    art = art_keys[rng.randrange(len(art_keys))]
     p = terrain_spawn(x, y, z, "", "#,relic_wall", art, "behav_asteroid")
     s = scale * rng.uniform(0.75, 1.35)
     p.blob.set("local_scale_x_coeff", s, 0)
@@ -104,120 +105,110 @@ def _prop(rng, x, y, z, scale):
     return p
 
 
-def _sphere_points(rng, n):
-    """`n` roughly-even directions on a unit sphere (golden-angle spiral).
+def relic_dress(seed=None, props=600, fill=0, over=6):
+    """Scatter the wall props over the volume boundary. Returns how many were made.
 
-    Even beats random here: uniform sampling clumps, and a clumped shell has holes
-    you can see straight out through.
-    """
-    out = []
-    step = math.pi * (3.0 - math.sqrt(5.0))
-    for i in range(n):
-        y = 1.0 - (2.0 * i + 1.0) / n
-        r = math.sqrt(max(0.0, 1.0 - y * y))
-        a = step * i
-        out.append((math.cos(a) * r, y, math.sin(a) * r))
-    return out
+    THE MATHS IS NOT HERE ANY MORE. `volume_surface_points` and `volume_solid_points` do
+    the sampling - evenly over a sphere, around a capsule at any orientation, on the faces
+    of a box, clipped to the outside of the union - and this picks art, scale and roles.
+    That split is the point: the geometry was general and every relic mission would have
+    copied it, while the look is this demo's and nobody should inherit it.
 
+    IDENTITY, not "run once": if the walls are already here, this is a no-op. The mock
+    runner and the LM server console can BOTH launch a @map, which doubled the prop count
+    on a restart soak - 454 became 908. Building only what is missing makes that harmless,
+    the same reason the house pattern is `player_ensure` rather than a once-flag.
 
-def relic_dress(seed=7, per_chamber=26, per_passage_segment=6, over=6):
-    """Scatter the wall props over the volume boundary.
-
-    Sown through the DripQueue rather than spawned inline: the engine costs ~280 ms
-    in ONE frame for a terrain block this size, and sowing takes that to ~110 ms.
+    `seed` and the art list default to what the RELIC AUTHORED (`Seed:` and `Art:` in the
+    .amd), so the file says how it looks rather than this module deciding for it.
     """
     vol = volume_get(VOLUME)
     if vol is None:
         return 0
-    # IDENTITY, not "run once": if the walls are already here, this is a no-op.
-    #
-    # The mock runner and the LM server console can BOTH launch a @map (the runner
-    # falls back to auto-start when the console is slow, then the console starts it
-    # too), which doubled the prop count on a restart soak - 454 became 908. Building
-    # only what is missing makes that harmless, and is the same reason the house
-    # pattern is `player_ensure` / `side_ensure` rather than a once-flag: it also
-    # survives a deliberate rebuild, a re-emitted init signal, and a late joiner.
     existing = len(role("relic_wall"))
     if existing:
         return existing
+    rec = relic_record(VOLUME)
+    if seed is None:
+        seed = int(rec.get("seed") or 7) if rec is not None else 7
+    art = _relic_art(rec)
     rng = random.Random(seed)
     made = 0
-    terrain_sow_begin(over=over, focus=(0, 0, 0))
-    try:
-        for (x, y, z, r) in vol.chambers.values():
-            for (dx, dy, dz) in _sphere_points(rng, per_chamber):
-                jitter = r * rng.uniform(1.0, 1.12)   # sit ON the wall, slightly out
-                _prop(rng, x + dx * jitter, y + dy * jitter, z + dz * jitter,
-                      scale=r / 90.0)
-                made += 1
-        for (c, h) in vol.boxes.values():
-            # Faces, not a shell: a box dressed with a sphere of props would read as a
-            # cave again and hide the corners that are the whole point.
-            for axis in range(3):
-                for sign in (-1, 1):
-                    for _i in range(per_chamber // 3):
-                        pt = [c[k] + rng.uniform(-h[k], h[k]) for k in range(3)]
-                        pt[axis] = c[axis] + sign * h[axis] * rng.uniform(1.0, 1.10)
-                        _prop(rng, pt[0], pt[1], pt[2], scale=min(h) / 90.0)
-                        made += 1
-        for solid in vol.solids:
-            # A subtracted shape MUST be dressed or it is an invisible obstacle - the
-            # containment will stop you at something you cannot see.
-            if solid[0] == "sphere":
-                (sx, sy, sz), sr = solid[1], solid[2]
-                for (dx, dy, dz) in _sphere_points(rng, per_chamber):
-                    j = sr * rng.uniform(0.88, 1.0)      # just INSIDE its own surface
-                    _prop(rng, sx + dx * j, sy + dy * j, sz + dz * j, scale=sr / 110.0)
-                    made += 1
-            elif solid[0] == "capsule":
-                sa, sb, sr = solid[1], solid[2], solid[3]
-                length = math.sqrt(sum((sb[i] - sa[i]) ** 2 for i in range(3)))
-                rings = max(2, int(length / max(sr * 2.2, 1.0)))
-                for ring in range(rings + 1):
-                    t = ring / float(rings)
-                    cx, cy, cz = [sa[i] + (sb[i] - sa[i]) * t for i in range(3)]
-                    for k in range(4):
-                        ang = (math.pi * 0.5 * k) + ring * 0.5
-                        _prop(rng, cx + math.cos(ang) * sr * 0.9, cy,
-                              cz + math.sin(ang) * sr * 0.9, scale=sr / 90.0)
-                        made += 1
-        for (a, b, r, _an, _bn) in vol.passages:
-            length = math.sqrt(sum((b[i] - a[i]) ** 2 for i in range(3)))
-            rings = max(2, int(length / (r * 1.6)))
-            # A frame for the ring: any two axes perpendicular to the passage.
-            ux, uy, uz = [(b[i] - a[i]) / max(length, 1e-6) for i in range(3)]
-            hx, hy, hz = (0.0, 1.0, 0.0) if abs(uy) < 0.9 else (1.0, 0.0, 0.0)
-            px, py, pz = (uy * hz - uz * hy, uz * hx - ux * hz, ux * hy - uy * hx)
-            pl = math.sqrt(px * px + py * py + pz * pz) or 1.0
-            px, py, pz = px / pl, py / pl, pz / pl
-            qx, qy, qz = (uy * pz - uz * py, uz * px - ux * pz, ux * py - uy * px)
-            for ring in range(rings + 1):
-                t = ring / float(rings)
-                cx, cy, cz = [a[i] + (b[i] - a[i]) * t for i in range(3)]
-                for k in range(per_passage_segment):
-                    ang = (2.0 * math.pi * k / per_passage_segment) + ring * 0.4
-                    rr = r * rng.uniform(1.0, 1.15)
-                    _prop(rng,
-                          cx + (px * math.cos(ang) + qx * math.sin(ang)) * rr,
-                          cy + (py * math.cos(ang) + qy * math.sin(ang)) * rr,
-                          cz + (pz * math.cos(ang) + qz * math.sin(ang)) * rr,
-                          scale=r / 70.0)
-                    made += 1
-    finally:
-        terrain_sow_end()
+    # NOT SOWN, and the bracket that used to be here was a lie: the sower intercepts only
+    # `terrain_spawn_asteroid_scatter` and the nebula path, so wrapping direct
+    # `terrain_spawn` calls queued nothing and `relic_sow_pending()` was always 0. It
+    # cannot simply be made real either - under a sow scope the spawn is queued and returns
+    # nothing, so there is no object to tag, and these props need their role for undress.
+    # Measured cost is ~0.08 ms per asteroid, so ~600 props is ~50 ms: worth sowing when
+    # that shows, and worth solving the tagging problem properly rather than by accident.
+    for (x, y, z, nx, ny, nz) in volume_surface_points(VOLUME, props, seed=seed):
+        # Scale with the room, so a big chamber does not read as gravel. The divisor is
+        # calibration against the asteroid meshes, whose nominal radius is ~90 units.
+        near = _nearest_size(vol, (x, y, z))
+        _prop(rng, art, x, y, z, scale=near / 90.0)
+        made += 1
+    # A subtracted solid MUST be dressed or it is an invisible obstacle - containment stops
+    # you at something with nothing there to see.
+    for (x, y, z, nx, ny, nz) in volume_solid_points(VOLUME, max(8, props // 12), seed=seed):
+        _prop(rng, art, x, y, z, scale=110.0 / 90.0)
+        made += 1
+    # Optional debris floating in the rooms rather than lining them.
+    for (x, y, z) in volume_inside_points(VOLUME, fill, seed=seed, margin=200.0):
+        _prop(rng, art, x, y, z, scale=0.6)
+        made += 1
     return made
 
 
-# The relic's own "atmosphere" - a nebula type, not just a colour.
-#
-# THE POINT IS NOT THE LOOK. The engine caps warp for a ship inside a nebula, all by
-# itself, which means the interior does not need a script throttle governor at all:
-# no per-tick playerThrottle writes, nothing for the helm to fight, and no client
-# disagreement. Doug's call - the engine already owns this, so scripting it was the
-# wrong layer.
-#
-# The ship-side signal is `inside_nebula_count` (LM reads it in
-# damage/extra_signals.mast), so a mission can also react to being in the murk.
+def _relic_art(rec):
+    """The prop art keys: whatever the relic authored, else the plain asteroid set.
+
+    VERIFY ANY AUTHORED KEY AGAINST shipData. An unknown key does not fail - it silently
+    falls back to the `unknown` mesh, so a typo shows up as a relic built out of question
+    marks. `plain_asteroid_4` and `_5` do NOT exist; the plain set starts at 6, which is
+    why the library's own `plain_asteroid_keys()` is the safer default than a hand-typed
+    tuple.
+    """
+    authored = (rec.get("art") if rec is not None else None) or ""
+    keys = [k.strip() for k in str(authored).split(",") if k.strip()]
+    if keys:
+        return tuple(keys)
+    try:
+        from sbs_utils.procedural.ship_data import plain_asteroid_keys
+        got = tuple(plain_asteroid_keys() or ())
+        if got:
+            return got
+    except Exception:
+        pass
+    return _PROP_ART
+
+
+def _nearest_size(vol, p):
+    """The size of the feature this point belongs to, for scaling a prop to its room.
+
+    Nearest-primitive rather than exact ownership: a prop at a junction could belong to
+    either shape, and picking the closer one is both cheap and what the eye expects.
+    """
+    best = 600.0
+    bestd = float("inf")
+    for prim in vol.primitives():
+        if prim[0] == "sphere":
+            d = abs(_dist3(p, prim[1]) - prim[2])
+            size = prim[2]
+        elif prim[0] == "capsule":
+            d = abs(_dist3(p, prim[1]) - prim[3])
+            size = prim[3]
+        else:
+            d = _dist3(p, prim[1])
+            size = min(prim[2])
+        if d < bestd:
+            bestd, best = d, size
+    return best
+
+
+def _dist3(a, b):
+    return math.sqrt(sum((a[i] - b[i]) ** 2 for i in range(3)))
+
+
 RELIC_ATMOSPHERE = {
     "color": "purple",
     "density_coef": 0.6,      # thin enough to see the walls you are trying not to hit
@@ -225,7 +216,7 @@ RELIC_ATMOSPHERE = {
 }
 
 
-def relic_atmosphere(size_cap=12000, over=6):
+def relic_atmosphere(size_cap=12000):
     """Fill the relic with ONE nebula so the engine caps warp inside it.
 
     THE POINT IS NOT THE LOOK. The engine caps warp for a ship inside a nebula by
@@ -262,7 +253,8 @@ def relic_atmosphere(size_cap=12000, over=6):
     terrain_set_nebula_object_size(int(min(radius * 2.0, size_cap)))
     made = []
     neb = terrain_spawn_nebula_sphere(
-        cx, cy, cz, radius=int(span), density_scale=1.0,
+        cx, cy, cz, radius=int(span),
+        density_scale=RELIC_ATMOSPHERE["density_scale"],
         density=RELIC_ATMOSPHERE["density_coef"], height=int(span),
         cluster_color=RELIC_ATMOSPHERE["color"], marker=False)
     for n in (neb or []):
