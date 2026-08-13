@@ -229,6 +229,7 @@ RELIC_ATMOSPHERE = {
     "color": "purple",
     "density_coef": 0.6,      # thin enough to see the walls you are trying not to hit
     "density_scale": 0.35,    # COUNT multiplier - see the perf note in relic_atmosphere
+    "object_size": 2500,      # per-OBJECT, not the cloud's reach - see relic_atmosphere
 }
 
 
@@ -263,16 +264,28 @@ def relic_atmosphere(size_cap=12000):
         return len(role("relic_atmos"))
     (cx, cy, cz), radius = vol.bound()
     span = min(radius, size_cap * 0.5)
-    # CAVEAT: a GLOBAL - it changes nebula sizing for all terrain in the mission. Fine
-    # for a demo with no other terrain; a mission that also builds a normal field should
-    # set this deliberately, once.
-    terrain_set_nebula_object_size(int(min(radius * 2.0, size_cap)))
+    # TWO DIFFERENT NUMBERS, and this used to conflate them. `radius` is how far the cloud
+    # REACHES - it has to cover the ruin, because that is what makes the engine cap warp
+    # inside it. `terrain_set_nebula_object_size` is how big each nebula OBJECT is, and
+    # its own docstring calls anything above ~3000 experimental (it needs the depth
+    # projection shader fix). Asking for the width of the whole relic - 12000 here - was
+    # asking the renderer for a size nobody has tested.
+    #
+    # And it is a GLOBAL, so it must be PUT BACK. Left set, this demo's ruin quietly
+    # resized every nebula spawned afterwards anywhere in the mission - a relic reaching
+    # out of its own map.
+    import sbs_utils.procedural.terrain as _terrain
+    _was = getattr(_terrain, "NEB_SIZE_LARGE", 1500)
+    terrain_set_nebula_object_size(RELIC_ATMOSPHERE["object_size"])
     made = []
-    neb = terrain_spawn_nebula_sphere(
-        cx, cy, cz, radius=int(span),
-        density_scale=RELIC_ATMOSPHERE["density_scale"],
-        density=RELIC_ATMOSPHERE["density_coef"], height=int(span),
-        cluster_color=RELIC_ATMOSPHERE["color"], marker=False)
+    try:
+        neb = terrain_spawn_nebula_sphere(
+            cx, cy, cz, radius=int(span),
+            density_scale=RELIC_ATMOSPHERE["density_scale"],
+            density=RELIC_ATMOSPHERE["density_coef"], height=int(span),
+            cluster_color=RELIC_ATMOSPHERE["color"], marker=False)
+    finally:
+        terrain_set_nebula_object_size(_was)
     for n in (neb or []):
         # terrain_* hands back SpawnData, not an Agent - the agent is .py_object (the
         # same idiom terrain.py uses on its own nebula marker).
