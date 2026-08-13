@@ -71,7 +71,7 @@ Straight up from the hub. A vertical shaft is a dot on a top-down plan - read th
 ### [spine](spine)
 ---
 Relic: ossuary
-Chamber: -3204, 0, -148, 600
+Chamber: -3204, 0, -956, 600
 Passage to: crypt 280
 ---
 
@@ -101,5 +101,11 @@ Subtracted from the hub: a mass hanging in the middle of the room you have to fl
 ---
 Relic: ossuary
 Solid: capsule, 0, -2100, 0, 0, 2100, 0, 130
+---
+
+### [box 12](box12)
+---
+Relic: ossuary
+Box: -2266, 700, 3713, 1839, 208, 3176
 ---
 A column running the height of the shaft. Vertical, so the plan shows it as a disc.
