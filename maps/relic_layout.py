@@ -31,8 +31,8 @@ import math
 import random
 
 from sbs_utils.procedural.amd_relics import relics_build, relic_record
-from sbs_utils.procedural.volume import (volume_get, volume_surface_points,
-                                          volume_inside_points, volume_solid_points)
+from sbs_utils.procedural.volume_dress import volume_dress, DEFAULT_STYLE
+from sbs_utils.procedural.volume import volume_get, volume_inside_points
 from sbs_utils.procedural.spawn import terrain_spawn
 from sbs_utils.procedural.space_objects import set_pos, clear_target
 from sbs_utils.procedural.roles import role
@@ -109,34 +109,23 @@ def relic_items():
     return items_declare_amd(amd_section(doc, "items"))
 
 
-def _prop(rng, art_keys, x, y, z, scale):
-    """One piece of wall: terrain, non-solid, never an AI behavior."""
-    art = art_keys[rng.randrange(len(art_keys))]
-    p = terrain_spawn(x, y, z, "", "#,relic_wall", art, "behav_asteroid")
-    s = scale * rng.uniform(0.75, 1.35)
-    p.blob.set("local_scale_x_coeff", s, 0)
-    p.blob.set("local_scale_y_coeff", s * rng.uniform(0.8, 1.2), 0)
-    p.blob.set("local_scale_z_coeff", s * rng.uniform(0.8, 1.2), 0)
-    p.engine_object.exclusion_radius = 0
-    return p
+def relic_dress(seed=None, props=600, fill=0, over=6, style=None):
+    """Build the demo relic's walls. Returns how many props were made.
 
-
-def relic_dress(seed=None, props=600, fill=0, over=6):
-    """Scatter the wall props over the volume boundary. Returns how many were made.
-
-    THE MATHS IS NOT HERE ANY MORE. `volume_surface_points` and `volume_solid_points` do
-    the sampling - evenly over a sphere, around a capsule at any orientation, on the faces
-    of a box, clipped to the outside of the union - and this picks art, scale and roles.
-    That split is the point: the geometry was general and every relic mission would have
-    copied it, while the look is this demo's and nobody should inherit it.
+    THE MATHS AND THE LOOK ARE BOTH THE LIBRARY'S NOW. `volume_dress` samples the
+    boundary, sizes each prop to its own spacing, and turns it to face the surface it
+    sits on; the fifteen lines that used to live here were a copy of the same fifteen in
+    `universe_relics.py`, which is how they drifted apart.
 
     IDENTITY, not "run once": if the walls are already here, this is a no-op. The mock
     runner and the LM server console can BOTH launch a @map, which doubled the prop count
     on a restart soak - 454 became 908. Building only what is missing makes that harmless,
     the same reason the house pattern is `player_ensure` rather than a once-flag.
 
-    `seed` and the art list default to what the RELIC AUTHORED (`Seed:` and `Art:` in the
-    .amd), so the file says how it looks rather than this module deciding for it.
+    `seed`, the art list and the wall style default to what the RELIC AUTHORED (`Seed:`,
+    `Art:` and `Walls:` in the .amd), so the file says how it looks rather than this
+    module deciding for it. `style` overrides that, which is what the styles specimen
+    uses to show four looks of one shape.
     """
     vol = volume_get(VOLUME)
     if vol is None:
@@ -147,30 +136,30 @@ def relic_dress(seed=None, props=600, fill=0, over=6):
     rec = relic_record(VOLUME)
     if seed is None:
         seed = int(rec.get("seed") or 7) if rec is not None else 7
-    art = _relic_art(rec)
-    rng = random.Random(seed)
-    made = 0
     # NOT SOWN, and the bracket that used to be here was a lie: the sower intercepts only
     # `terrain_spawn_asteroid_scatter` and the nebula path, so wrapping direct
     # `terrain_spawn` calls queued nothing and `relic_sow_pending()` was always 0. It
     # cannot simply be made real either - under a sow scope the spawn is queued and returns
     # nothing, so there is no object to tag, and these props need their role for undress.
-    # Measured cost is ~0.08 ms per asteroid, so ~600 props is ~50 ms: worth sowing when
-    # that shows, and worth solving the tagging problem properly rather than by accident.
-    for (x, y, z, nx, ny, nz) in volume_surface_points(VOLUME, props, seed=seed):
-        # Scale with the room, so a big chamber does not read as gravel. The divisor is
-        # calibration against the asteroid meshes, whose nominal radius is ~90 units.
-        near = _nearest_size(vol, (x, y, z))
-        _prop(rng, art, x, y, z, scale=near / 90.0)
-        made += 1
-    # A subtracted solid MUST be dressed or it is an invisible obstacle - containment stops
-    # you at something with nothing there to see.
-    for (x, y, z, nx, ny, nz) in volume_solid_points(VOLUME, max(8, props // 12), seed=seed):
-        _prop(rng, art, x, y, z, scale=110.0 / 90.0)
-        made += 1
-    # Optional debris floating in the rooms rather than lining them.
+    # Measured cost is ~0.08 ms per asteroid, so ~600 props is ~50 ms.
+    made = volume_dress(
+        vol, n=props, seed=seed, roles="relic_wall",
+        style=style or (rec.get("walls") if rec is not None else None) or DEFAULT_STYLE,
+        art=(rec.get("art") if rec is not None else None),
+        part_styles=(rec.get("part_walls") if rec is not None else None),
+        part_art=(rec.get("part_art") if rec is not None else None))
+    # Optional debris floating in the rooms rather than lining them. Still local, because
+    # "rubble on the floor" is this demo's idea and not something a relic should inherit.
+    rng = random.Random(seed)
+    art = _relic_art(rec)
     for (x, y, z) in volume_inside_points(VOLUME, fill, seed=seed, margin=200.0):
-        _prop(rng, art, x, y, z, scale=0.6)
+        key = art[rng.randrange(len(art))]
+        p = terrain_spawn(x, y, z, "", "#,relic_wall", key, "behav_asteroid")
+        if p is None:
+            continue
+        for axis in ("x", "y", "z"):
+            p.blob.set("local_scale_" + axis + "_coeff", rng.uniform(0.5, 0.8), 0)
+        p.engine_object.exclusion_radius = 0
         made += 1
     return made
 
@@ -196,33 +185,6 @@ def _relic_art(rec):
     except Exception:
         pass
     return _PROP_ART
-
-
-def _nearest_size(vol, p):
-    """The size of the feature this point belongs to, for scaling a prop to its room.
-
-    Nearest-primitive rather than exact ownership: a prop at a junction could belong to
-    either shape, and picking the closer one is both cheap and what the eye expects.
-    """
-    best = 600.0
-    bestd = float("inf")
-    for prim in vol.primitives():
-        if prim[0] == "sphere":
-            d = abs(_dist3(p, prim[1]) - prim[2])
-            size = prim[2]
-        elif prim[0] == "capsule":
-            d = abs(_dist3(p, prim[1]) - prim[3])
-            size = prim[3]
-        else:
-            d = _dist3(p, prim[1])
-            size = min(prim[2])
-        if d < bestd:
-            bestd, best = d, size
-    return best
-
-
-def _dist3(a, b):
-    return math.sqrt(sum((a[i] - b[i]) ** 2 for i in range(3)))
 
 
 RELIC_ATMOSPHERE = {

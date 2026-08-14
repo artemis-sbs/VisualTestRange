@@ -115,6 +115,56 @@ type: visual/relic_chamber
     ->END
 
 
+# --------------------------------------------------------------- one shape, four looks
+#
+# The question this settles is the one a still is FOR: does a wall read as built or as
+# eroded? Four identical boxes in a row, dressed four ways, so the comparison is in one
+# frame instead of in a memory of last week's flight.
+#
+# It is deliberately NOT the ossuary: the demo relic is a cave and every style would be
+# judged against a cave. A plain box is what a station corridor actually is, and a box is
+# also where the old sampler was worst - uniform-random faces, clumps and peep-holes.
+=== run_visual_relic_styles
+metadata: ``` yaml
+type: visual/relic_styles
+```
+    _vr_looks = ~~["rock", "plates", "blocks", "ribs"]~~
+    _gap = 4000
+    _made = 0
+    for _si in range(len(_vr_looks)):
+        _vr_look = _vr_looks[_si]
+        _x = (_si - 1.5) * _gap
+        _vname = f"styles_{_vr_look}"
+        volume_define(_vname, {})
+        volume_box(_vname, "room", _x, 0, 0, 1200, 700, 900)
+        _made += volume_dress(_vname, n=150, seed=17, style=_vr_look, roles="relic_wall")
+        # Say which is which, or a row of four walls is four walls.
+        marker_point(_x, 900, 0, _vr_look)
+
+    # Outside and above the row, far enough back that all four are in frame at once.
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, lens=(0, 3000, 0 - 9000), look=(0, 0, 0))
+
+    _expect = ~~[
+        "FOUR boxes in a row, labelled rock / plates / blocks / ribs",
+        "plates and blocks read as FLAT SURFACES - panels lying on the wall, not boulders floating near it",
+        "ribs reads as ring frames laid ALONG the wall",
+        "rock reads as an irregular rubble wall - the old look, but tiled rather than lumpy",
+        "no box shows open starfield straight through a face",
+    ]~~
+    visual_case("Relic: wall styles", _expect,
+                notes="one box, four styles - the built looks orient to the surface and size to their spacing",
+                data=f"{_made} props over 4 boxes of 2400x1400x1800 at 150 each")
+    visual_expect("relic_styles: props built", _made > 0)
+    ->END
+
+@map/visual_relic_styles "Visual: relic wall styles"
+" One box, four ways. Do the built styles read as walls rather than rubble?
+    visual_set_index_by_name("relic_styles")
+    await task_schedule(run_visual_relic_styles)
+    ->END
+
+
 # ------------------------------------------------------------------- the whole relic
 #
 # NOT a framed still, on purpose. Containment FEEL is the one thing a picture cannot
