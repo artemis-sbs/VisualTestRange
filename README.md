@@ -55,6 +55,7 @@ rebuild.
 | `visual_motion` | three ships crossing at documented speeds | stutter, teleporting, or speeds that do not scale |
 | `visual_shield_rings` | pinned shield fractions, plus a lopsided ship | wrong color bands; fore/aft halves swapped |
 | `visual_button_chrome` | plain button vs `background_color` at five tones, over the live view | tells you whether a colorbutton is skinned or flat, and which fills the hover highlight still reads over |
+| `visual_dropdown_select` | three script writers moving a dropdown's selection, plus a control that nothing writes to | a cell stuck on One (its writer never reached the props string the renderer reads -- LM #568); the control moving too, which would mean the panel is rebuilding rather than updating in place |
 
 ### Camera spikes (CINEMATIC_PLAN.md Phase 0)
 
@@ -123,6 +124,8 @@ Harness (`maps/visual_harness.py`):
 | `visual_planet_spawn(...)` | a gas giant with the whole `planet_*` knob set in one call |
 | `visual_reset_objects()` / `visual_reset_sim()` | tear the scene down (see the tick between them) |
 | `visual_widgets([[label, background], ...])` | draw controls under the card — for a specimen about how a CONTROL looks |
+| `visual_dropdowns([[name, caption, props, style], ...])` | same, for dropdowns — and the console hands each built widget back |
+| `visual_dropdown(name)` / `visual_dropdown_shown(name)` | the live widget, and the label it is currently SENDING (read from its props, not from `.value` — the two disagreeing is the bug) |
 | `visual_case(..., hold=20)` | how long a sweep should leave this one up; a specimen that plays out over time must say so |
 | `visual_generation()` | the scene counter a long-running driver checks — object ids are recycled, this is not |
 

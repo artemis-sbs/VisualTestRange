@@ -35,6 +35,7 @@ import maps/visual_nebula.mast
 import maps/visual_motion.mast
 import maps/visual_shield_rings.mast
 import maps/visual_button_chrome.mast
+import maps/visual_dropdown_select.mast
 import maps/visual_lower_third_portrait.mast
 import maps/visual_square_panel.py
 import maps/visual_square_width.mast

@@ -86,6 +86,59 @@ def visual_widget_specs():
     return list(_WIDGETS)
 
 
+# Dropdowns a specimen wants drawn, plus the LIVE widgets the console built from them.
+# Buttons can be declared and forgotten; a dropdown specimen is about what happens when a
+# script WRITES to one after it is on screen, so the specimen needs the widget back. The
+# console registers each one here as it builds it, and re-registers on every rebuild, so a
+# specimen always holds the widget that is currently presenting rather than a dead one.
+_DROPDOWNS = []
+_DROPDOWN_LIVE = {}
+
+
+def visual_dropdowns(specs):
+    """Declare dropdowns to draw under the card.
+
+    Each spec is [name, caption, props, style]. `name` is how the specimen asks for the
+    live widget back; `props` is the dropdown's own `text:`/`list:` string; `style` carries
+    layout and any `tag:` alias a specimen wants to reach it by.
+    """
+    _DROPDOWNS.clear()
+    _DROPDOWN_LIVE.clear()
+    for s in specs:
+        _DROPDOWNS.append([str(s[0]), str(s[1]), str(s[2]),
+                           str(s[3]) if len(s) > 3 else ""])
+    _CARD["seq"] += 1
+
+
+def visual_dropdown_specs():
+    return list(_DROPDOWNS)
+
+
+def visual_dropdown_register(name, widget):
+    """The console handing back the widget it just built. Last build wins."""
+    _DROPDOWN_LIVE[str(name)] = widget
+    return widget
+
+
+def visual_dropdown(name):
+    """The live widget for `name`, or None before the console has built it."""
+    return _DROPDOWN_LIVE.get(str(name))
+
+
+def visual_dropdown_shown(name):
+    """The label a dropdown is currently SENDING to the engine.
+
+    Read from the props string `_present` transmits, not from `.value` -- the two
+    disagreeing is the whole subject of LM #568, so a check that trusted `.value` would
+    pass while the screen still said something else.
+    """
+    from sbs_utils.helpers import props_display_text
+    w = visual_dropdown(name)
+    if w is None:
+        return None
+    return props_display_text(w.values)
+
+
 def visual_hold(default_seconds):
     """Seconds the sweep should hold the current specimen - its own request, or the default."""
     h = _CARD.get("hold")

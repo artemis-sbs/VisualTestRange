@@ -88,6 +88,21 @@
             if _ws[1] != "":
                 _sb.background_color = _ws[1]
 
+    # Dropdowns a SPECIMEN asked for. Same reasoning as the buttons above, with one extra
+    # step: the specimen gets the built widget handed back to it. A dropdown specimen is
+    # about what a script WRITING to a live control does to the screen, so declaring it is
+    # only half - somebody has to hold it afterwards. Registering on every rebuild means the
+    # specimen always writes to the widget that is presenting now.
+    _dspecs = visual_dropdown_specs()
+    if len(_dspecs) > 0:
+        gui_section("area: 50, 34, 99, 88;")
+        for _dsp in _dspecs:
+            gui_row("row-height: content; padding: 4px, 6px, 0, 6px;")
+            gui_text(visual_text(_dsp[1], "gui-1", "#8fa4bd"))
+            gui_row("row-height: 2.4em; padding: 0, 6px, 2px, 6px;")
+            _dw = gui_drop_down(_dsp[2], _dsp[3])
+            visual_dropdown_register(_dsp[0], _dw)
+
     # The control bar, along the bottom edge. Named widgets, not inline calls: an inline
     # `on gui_message(gui_button("x")):` is accepted by the mock and rejected by the
     # engine's stricter parser.

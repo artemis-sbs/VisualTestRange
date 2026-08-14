@@ -1,0 +1,104 @@
+# SPECIMEN: dropdown selection from script - does a written selection reach the screen?
+#
+# LM #568: a dropdown's rendered state lives in ONE string, the props `_present` sends. A
+# writer that lands anywhere else changes nothing an eye can see, and nothing a structural
+# test can see either - the widget object holds exactly what the script gave it, so
+# `.value` reads back correctly while the screen still says the old label. That is why the
+# bug survived: every plausible assertion passes.
+#
+# Two of the three writers were silently doing that. `update()` wrote a `props` attribute
+# nothing reads, and the `value` setter wrote only `_value`. `gui_update()` calls `update()`,
+# so naming a dropdown by tag was dead too. Only `.values = ...` worked, and only when
+# something else happened to re-present the widget.
+#
+# Why it needs an EYE: the fix is not "the object holds Two", it is "the engine is DRAWING
+# Two". Those are different claims, and only one of them can be seen. Cell 1 is the control
+# that keeps the other three honest - if everything on this panel says Two, including the
+# dropdown nobody wrote to, then the panel is repainting wholesale and the specimen is
+# measuring a page rebuild rather than an in-place update.
+#
+# The last cell is the other half of the same string: a selection the PLAYER makes has to
+# land in that props string too, or the next present puts the dropdown back where it was.
+
+@map/visual_dropdown_select "Visual: dropdown selection"
+" Three ways to set a dropdown's selection from script, one control, and one to pick by hand.
+    visual_set_index_by_name("dropdown_select")
+    await task_schedule(run_visual_dropdown_select)
+    ->END
+
+
+=== run_visual_dropdown_select
+metadata: ``` yaml
+type: visual/dropdown_select
+```
+    # Something lit behind the panel: these controls are drawn over the live view, which is
+    # where a mission actually puts them, and it is the only place their draw order shows.
+    _dd_subject = to_object(npc_spawn(0, 0, 0, "Backdrop", "tsn", "starbase_command", "behav_station"))
+    _dd_anchor = visual_anchor(0, 0, 0)
+    visual_camera(_dd_anchor, lens=(0, 1200, 0 - 3800))
+
+    # [name, caption, props, style]. Every one starts on One, so a dropdown that never moves
+    # is telling you its writer did nothing.
+    _dd_specs = ~~[
+        ['control', '1. CONTROL - nothing writes to this one. It must stay on One.',
+         'text:One;list:One,Two,Three;', ''],
+        ['setter', '2. widget.value = <label>',
+         'text:One;list:One,Two,Three;', ''],
+        ['update', '3. widget.update("text:<label>;list:...")',
+         'text:One;list:One,Two,Three;', ''],
+        ['by_tag', '4. gui_update_shared("vr_dd", ...) - by name, not by reference',
+         'text:One;list:One,Two,Three;', 'tag:vr_dd;'],
+        ['hand', '5. PICK ONE BY HAND - it must still be picked after the next step',
+         'text:One;list:One,Two,Three;', ''],
+    ]~~
+    visual_dropdowns(_dd_specs)
+
+    _dd_expect = ~~[
+        "cells 2, 3 and 4 step One -> Two -> Three -> Two together, every 2.5 seconds",
+        "cell 1 NEVER moves. If it moves, the page is rebuilding and this proves nothing",
+        "a cell stuck on One is its writer landing somewhere the renderer does not read",
+        "cell 5: open it, pick Three by hand, then wait for the next step",
+        "  cell 5 must still say Three - a hand-picked value has to survive a repaint",
+        "nothing here is a page rebuild: the panel is built once and written to in place",
+    ]~~
+    visual_case("Dropdown selection from script", _dd_expect, subtitle="LM #568 - update() and .value= could not move a dropdown", notes="the rendered state is the props string _present sends; a writer that misses it is invisible to the eye AND to structural tests", data="4 script-written cells + 1 control, cycling every 2.5s")
+
+    # Wait for the stage to build the controls. The specimen declares them; only a console
+    # can draw them, and it repaints on the card change above.
+    for _ddw in range(20):
+        await delay_sim(0.5)
+        jump dd_ready if visual_dropdown("setter") is not None
+
+---dd_ready
+    # Detail is printed on a PASS line too, so it says what the check FOUND, not what a
+    # failure would have meant.
+    visual_expect("dropdown: the stage built the declared controls", visual_dropdown("setter") is not None, f"{len(visual_dropdown_specs())} declared")
+    ->END if visual_dropdown("setter") is None
+
+    # Four steps, not one. A single change can be a coincidence of build order; a dropdown
+    # that follows the sequence is following the writer. The repeat of Two at the end also
+    # catches a writer that can only ever move FORWARD through the list.
+    _dd_seq = ~~['Two', 'Three', 'One', 'Two']~~
+    for _ddc in range(4):
+        await delay_sim(2.5)
+        _dd_want = _dd_seq[_ddc]
+        _dd_props = f"text:{_dd_want};list:One,Two,Three;"
+
+        _dd_w_set = visual_dropdown("setter")
+        if _dd_w_set is not None:
+            _dd_w_set.value = _dd_want
+
+        _dd_w_upd = visual_dropdown("update")
+        if _dd_w_upd is not None:
+            _dd_w_upd.update(_dd_props)
+
+        gui_update_shared("vr_dd", _dd_props)
+
+        # Read what each one would SEND, not what it holds -- see visual_dropdown_shown.
+        visual_expect(f"dropdown: .value= sends {_dd_want} (step {_ddc})", visual_dropdown_shown("setter") == _dd_want, f"sending {visual_dropdown_shown('setter')}")
+        visual_expect(f"dropdown: .update() sends {_dd_want} (step {_ddc})", visual_dropdown_shown("update") == _dd_want, f"sending {visual_dropdown_shown('update')}")
+        visual_expect(f"dropdown: gui_update by name sends {_dd_want} (step {_ddc})", visual_dropdown_shown("by_tag") == _dd_want, f"sending {visual_dropdown_shown('by_tag')}")
+        visual_expect(f"dropdown: the control never moved (step {_ddc})", visual_dropdown_shown("control") == "One", f"control is showing {visual_dropdown_shown('control')}")
+        visual_expect(f"dropdown: .value reads back what was written (step {_ddc})", _dd_w_set.value == _dd_want, f"value is {_dd_w_set.value}")
+
+    ->END
