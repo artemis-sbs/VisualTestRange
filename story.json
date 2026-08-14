@@ -4,7 +4,8 @@
     ],
     "mastlib": [
         "artemis-sbs.LegendaryMissions.consoles.v1.4.0.mastlib",
-        "artemis-sbs.LegendaryMissions.prefabs.v1.4.0.mastlib"
+        "artemis-sbs.LegendaryMissions.prefabs.v1.4.0.mastlib",
+        "artemis-sbs.LegendaryMissions.turrets.v1.4.0.mastlib"
     ],
     "shared_media": [
         "artemis-sbs.LegendaryMissions.media.v1.4.0.zip"

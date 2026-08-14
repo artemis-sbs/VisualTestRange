@@ -1164,3 +1164,44 @@ def _mod_art_select(only):
 
 def mod_art_variant_keys():
     return ["modart_" + v[0] for v in _mod_art_select(mod_art_only())]
+
+# Specimens in this range's own extraShipData.json that point at art ON PURPOSE not there,
+# so the missing-art path itself can be looked at. They are not failures.
+VISUAL_ART_DELIBERATELY_MISSING = ("modart_bare",)
+
+
+def visual_art_roots_missing():
+    """Every (ship_key, artfileroot) in the catalog whose art is not in the install.
+
+    The census puts one object per key in a grid so a missing art root shows as a HOLE -
+    which works, and needs an eye on it. This is the same question asked of the filesystem,
+    so a headless run can fail on it too.
+
+    It matters most for ADD-ON hulls, whose art roots nobody has ever seen render: LM's
+    turret entries asked for `tsn-fighter` when the art is `TSNfighter`, and the first
+    client to draw one got a modal assert out of ObjectTypeDrawData.cpp. Empty when there
+    is no install to check against."""
+    import os
+    from sbs_utils.procedural.ship_data import get_ship_index, get_ship_data_for
+    try:
+        from sbs_utils.fs import get_artemis_dir
+        ships = os.path.join(get_artemis_dir(), "data", "graphics", "ships")
+        if not os.path.isdir(ships):
+            return []
+        have = set()
+        for name in os.listdir(ships):
+            have.add(name.split(".")[0].lower())
+    except Exception:                               # noqa: BLE001
+        return []
+    missing = []
+    for key in sorted((get_ship_index() or {}).keys()):
+        if key in VISUAL_ART_DELIBERATELY_MISSING:
+            continue
+        root = str((get_ship_data_for(key) or {}).get("artfileroot", key) or "")
+        # A PATH is a mod keeping art outside the install. It resolves somewhere this
+        # check does not look, so a bare-name catalog says nothing about it.
+        if "/" in root or "\\" in root:
+            continue
+        if root and root.lower() not in have:
+            missing.append((key, root))
+    return missing

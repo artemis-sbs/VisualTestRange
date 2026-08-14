@@ -52,4 +52,8 @@ type: visual/art_census
 
     visual_expect("census: every shipData key spawned", _made == len(_keys), f"{_made}/{len(_keys)}")
     visual_expect("census: catalog is not empty", len(_keys) > 0)
+    # A hole in the grid is the eye-check; this is the same question asked of the disk,
+    # so a headless run fails on it too. Skips itself when there is no install.
+    _no_art = visual_art_roots_missing()
+    visual_expect("census: every art root has art", len(_no_art) == 0, f"missing art: {_no_art}")
     ->END
