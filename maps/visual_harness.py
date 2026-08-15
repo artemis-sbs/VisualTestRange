@@ -1040,8 +1040,9 @@ def mod_art_build_and_load():
             e[mod_art_key()] = path.replace("{ships}", ships)
         entries.append(e)
 
-    # NO EXTENSION on the name handed to add_extra_ship_data - the engine tries .yaml then
-    # .json itself, and their own example passes a bare "extraShipDataAAA" for a .json file.
+    # The 2026-08-15 engine takes ONE argument, the fully-pathed file. (It still searches
+    # for a missing extension, measured - but naming the file we just wrote means the
+    # engine and this harness cannot end up reading different ones.)
     stem = "mod_art_variants"
     name = stem + ".json"
     try:
@@ -1056,7 +1057,7 @@ def mod_art_build_and_load():
         return False, "add_extra_ship_data absent - engine older than 1.3.5"
     mod_art_mark("LOADING", ",".join(e["key"] for e in entries))
     try:
-        fn(stem, mission.replace("\\", "/"))
+        fn(os.path.join(mission, name).replace("\\", "/"))
     except Exception as e:
         return False, "add_extra_ship_data raised: " + str(e)
     mod_art_mark("LOADED")
