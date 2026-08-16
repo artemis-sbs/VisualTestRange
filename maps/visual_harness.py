@@ -936,21 +936,28 @@ def mod_art_declare():
 # would not walk out of it. The question now is which COMBINATION of the two fields, and
 # which spelling of the path, the engine actually honors - so each variant below changes
 # exactly one thing and they are judged side by side in a single frame.
+_MOD_PACK = "__lib__/media/artemis-sbs.Anime-Fan-Mod.media.v1.0.0/ships"
+
 MOD_ART_VARIANTS = (
-    ("control_ok",  "a hull the engine certainly has",               "tsn_light_cruiser", None),
-    ("root_bare",   "artfileroot only, data loaded from the mod",    "God_Phoenix",       None),
-    ("abs_noext",   "art_file_path ABSOLUTE, no extension",          None,   "{ships}/God_Phoenix"),
-    ("abs_obj",     "art_file_path ABSOLUTE, with .obj",             None,   "{ships}/God_Phoenix.obj"),
-    ("abs_dir",     "art_file_path ABSOLUTE folder + artfileroot",   "God_Phoenix", "{ships}"),
-    ("rel_gfx",     "RELATIVE to data/graphics/ships",               None,
-     "../../missions/anime_mods/anime_ships/graphics/ships/God_Phoenix"),
-    ("rel_mission", "RELATIVE to the mission folder",                None,
-     "../anime_mods/anime_ships/graphics/ships/God_Phoenix"),
-    ("rel_data",    "RELATIVE to the data folder",                   None,
-     "missions/anime_mods/anime_ships/graphics/ships/God_Phoenix"),
-    ("rel_exe",     "RELATIVE to the exe folder",                    None,
-     "data/missions/anime_mods/anime_ships/graphics/ships/God_Phoenix"),
-    ("control_bad", "a name that exists nowhere",                    "God_Phoenix_nope",  None),
+    # RETARGETED for engine 1.3.6, which changed the question underneath this specimen.
+    #
+    # `artfileroot` IS A PATH now: the engine's own shipData.yaml reads `ships/<name>` for
+    # all 184 entries, so the base moved up from data/graphics/ships to data/graphics, and
+    # a BARE root no longer resolves - it asserts (`false && "the artfileroot of this ship
+    # was not found."`, ObjectTypeDrawData.cpp:44, measured one hull per run).
+    # `artfilepath` is gone from the engine's data, so every variant spells the whole path
+    # in `artfileroot` alone.
+    #
+    # ONE COPY OF THE ART PER SPELLING (GP_exe / GP_gfx / GP_data). Three spellings of the
+    # SAME file are indistinguishable by access time, and the first run of this retarget
+    # proved only "one of these three worked" - which is not an answer. Each variant now
+    # names its own mesh, so the filesystem attributes it.
+    ("control_ok",  "stock hull, new ships/ spelling",     "ships/tsn_light_cruiser"),
+    ("root_exe",    "path from the EXE folder",            "data/missions/%s/GP_exe" % _MOD_PACK),
+    ("root_gfx",    "RELATIVE to data/graphics",           "../missions/%s/GP_gfx" % _MOD_PACK),
+    ("root_data",   "RELATIVE to the data folder",         "missions/%s/GP_data" % _MOD_PACK),
+    ("root_bare",   "BARE name - expected to assert",      "God_Phoenix"),
+    ("control_bad", "a name that exists nowhere",          "ships/God_Phoenix_nope"),
 )
 
 
@@ -1016,10 +1023,6 @@ def mod_art_build_and_load():
     from sbs_utils.procedural.ship_data import get_ship_data_for
 
     mission = get_mission_dir()
-    missions = os.path.dirname(mission)
-    ships = os.path.join(missions, "anime_mods", "anime_ships", "graphics", "ships")
-    ships = ships.replace("\\", "/")
-
     base = get_ship_data_for("tsn_light_cruiser")
     if base is None:
         return False, "no tsn_light_cruiser in ship data to base the variants on"
@@ -1029,15 +1032,16 @@ def mod_art_build_and_load():
         return False, "variant=" + str(only) + " matched none of " + ",".join(
             v[0] for v in MOD_ART_VARIANTS)
     entries = []
-    for key, _why, root, path in wanted:
+    for key, _why, root in wanted:
         e = dict(base)
         e["key"] = "modart_" + key
         e["name"] = key
         e["meshscale"] = 0.17 if key == "closeup" else 0.2
-        if root is not None:
-            e["artfileroot"] = root
-        if path is not None:
-            e[mod_art_key()] = path.replace("{ships}", ships)
+        e["artfileroot"] = root
+        # `artfilepath` is deliberately NOT written. It is gone from the engine's own
+        # data, and artfileroot carries the whole path now - so a variant that set both
+        # would not be testing one thing.
+        e.pop(mod_art_key(), None)
         entries.append(e)
 
     # The 2026-08-15 engine takes ONE argument, the fully-pathed file. (It still searches
@@ -1073,7 +1077,7 @@ def mod_art_build_and_load():
 # have", and they must go back in the moment the crash is fixed. `variant=safe` is how the
 # REST of the specimen stays runnable meanwhile: without it one engine bug makes the whole
 # art question unanswerable.
-MOD_ART_CRASHERS = ("root_bare", "abs_dir", "control_bad")
+MOD_ART_CRASHERS = ("root_bare", "control_bad")   # both MEASURED to assert on 1.3.6
 
 # --- turning the crash into an ORACLE ---------------------------------------
 #
