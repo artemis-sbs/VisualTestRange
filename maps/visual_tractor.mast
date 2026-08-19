@@ -1,0 +1,86 @@
+# SPECIMEN: tractor - where a tractor beam parks the ship it catches.
+#
+# The engine tether is not a rope. A connection left attached pulls its target all the way
+# into the source hull whatever pull distance it was handed (measured in the grav_tether
+# data harness: 1500 -> ~165), so an ability that attaches one and walks away ends with the
+# catch sitting INSIDE the grabber - which is what made LM's elite tractor look wrong, since
+# the tether particle was then drawing between two overlapping hulls (LM issue 54).
+#
+# The fix drives the beam per tick instead: pull hard while the catch is outside a standoff
+# of 500 clear units plus both hull radii, cut the moment it is inside. Both are on stage
+# here, from the same start distance, so the difference is the whole specimen - and the
+# static pair is the negative control: if the two pairs end up looking the SAME, the driven
+# beam is not doing anything and nothing else in the frame means much.
+#
+# This is a MOCK-physics look by default (cosmos_dev simulates the tractor pull). The feel
+# in the engine is a separate question the card keeps asking.
+
+@map/visual_tractor "Visual: tractor"
+" Two tractor beams from the same start distance - static tether against driven beam.
+    visual_set_index_by_name("tractor")
+    await task_schedule(run_visual_tractor)
+    ->END
+
+
+=== run_visual_tractor
+metadata: ``` yaml
+type: visual/tractor
+```
+    _lane = 2600
+    _reach = 2400
+
+    # The pair named tractor_static is the OLD behavior: one connection, then walk away.
+    _s_elite = to_object(npc_spawn(0, 0, 0 - _lane, "tractor_static grabber", "raider", "kralien_dreadnought", "behav_npcship"))
+    _s_prey = to_object(npc_spawn(_reach, 0, 0 - _lane, "tractor_static catch", "tsn", "tsn_light_cruiser", "behav_npcship"))
+
+    # The pair named tractor_driven is the shipped fix, running the ability's own calls.
+    _d_elite = to_object(npc_spawn(0, 0, _lane, "tractor_driven grabber", "raider", "kralien_dreadnought", "behav_npcship"))
+    _d_prey = to_object(npc_spawn(_reach, 0, _lane, "tractor_driven catch", "tsn", "tsn_light_cruiser", "behav_npcship"))
+
+    ->END if _s_elite is None or _s_prey is None or _d_elite is None or _d_prey is None
+
+    # Both catches run for it, so the beam is what stops them rather than their own inertia.
+    target_pos(_s_prey.id, _reach + 14000, 0, 0 - _lane, throttle=1.0)
+    target_pos(_d_prey.id, _reach + 14000, 0, _lane, throttle=1.0)
+
+    # The old ability, in one line: the capture distance handed straight to the engine.
+    con = sim.AddTractorConnection(_s_elite.id, _s_prey.id, sbs.vec3(0, 0, 0), _reach)
+
+    # The new one asks the shipped helper where to hold, then drives the beam below.
+    _hold = elite_tractor_hold_distance(_d_elite.id, _d_prey.id)
+
+    # The same tether particle the ability puts on its catch, on both, so the effect can be
+    # judged against each hold distance rather than described.
+    _s_eo = to_engine_object(_s_prey.id)
+    _d_eo = to_engine_object(_d_prey.id)
+    if _s_eo is not None:
+        sbs.add_particle_emittor(_s_eo, -1, "align:True; shape:hull; color:green,white; lifespan:4; image_cell:0,3; size:0.8; speed: 5; count:10")
+    if _d_eo is not None:
+        sbs.add_particle_emittor(_d_eo, -1, "align:True; shape:hull; color:green,white; lifespan:4; image_cell:0,3; size:0.8; speed: 5; count:10")
+
+    _expect = ~~[
+        "both catches start level with each other, 2400 out from their grabber",
+        "both are hauled in - neither escapes, though both are running at full throttle",
+        "tractor_static catch ends up ON its grabber, hulls touching or overlapping",
+        "tractor_driven catch stops short and holds a clear gap, about a hull-length off",
+        "the green tether particle reads as a beam on tractor_driven and as a mess on tractor_static",
+    ]~~
+    visual_case("Tractor hold distance", _expect, subtitle="static tether against the driven beam - LM issue 54", notes="judge by ship NAME, not by side of frame; the two pairs MUST differ or the specimen proved nothing", data="driven standoff = 500 clear units + both hull radii; pull stiffness 1.0", hold=24)
+
+    _anchor = visual_anchor(0, 0, 0)
+    visual_camera(_anchor, lens=(0, 5200, 0 - 7000))
+
+    _d0 = sbs.distance_id(_d_elite.id, _d_prey.id)
+
+    # Drive the beam exactly as the ability's own hold loop does.
+    for _i in range(72):
+        elite_tractor_pull(_d_elite.id, _d_prey.id, _hold)
+        await delay_sim(0.25)
+
+    _s_end = sbs.distance_id(_s_elite.id, _s_prey.id)
+    _d_end = sbs.distance_id(_d_elite.id, _d_prey.id)
+
+    visual_expect("tractor: the driven beam hauled its catch in", _d_end < _d0 - 500, f"driven {_d0} -> {_d_end}")
+    visual_expect("tractor: the driven beam held it off the hull", _d_end > 300, f"driven ends at {_d_end}, hold {_hold}")
+    visual_expect("tractor: the static tether ended up closer - the two differ", _s_end < _d_end, f"static {_s_end} vs driven {_d_end}")
+    ->END

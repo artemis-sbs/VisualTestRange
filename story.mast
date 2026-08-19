@@ -45,6 +45,7 @@ import maps/visual_draw_layer.mast
 import maps/visual_layer_style_panel.py
 import maps/visual_layer_style.mast
 import maps/visual_particles.mast
+import maps/visual_tractor.mast
 
 # --- Phase 0 camera spikes (CINEMATIC_PLAN.md) -----------------------------
 import maps/visual_camera_offsets.mast
