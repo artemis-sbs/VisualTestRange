@@ -26,8 +26,13 @@
 metadata: ``` yaml
 type: visual/tractor
 ```
-    _lane = 2600
-    _reach = 2400
+    # Framed TIGHT on purpose. The engine has no camera you can pull back with, so the
+    # specimen has to arrive already framed - and the thing being judged is a 600-unit gap,
+    # which is a speck in a shot wide enough to hold a 2400-unit haul. So the scene is small
+    # and the lens is close: the catch still travels visibly, and the gap it stops at is a
+    # readable fraction of the frame rather than a few pixels.
+    _lane = 800
+    _reach = 1600
 
     # The pair named tractor_static is the OLD behavior: one connection, then walk away.
     _s_elite = to_object(npc_spawn(0, 0, 0 - _lane, "tractor_static grabber", "raider", "kralien_dreadnought", "behav_npcship"))
@@ -59,16 +64,19 @@ type: visual/tractor
         sbs.add_particle_emittor(_d_eo, -1, "align:True; shape:hull; color:green,white; lifespan:4; image_cell:0,3; size:0.8; speed: 5; count:10")
 
     _expect = ~~[
-        "both catches start level with each other, 2400 out from their grabber",
+        "both catches start level with each other, 1600 out from their grabber",
         "both are hauled in - neither escapes, though both are running at full throttle",
         "tractor_static catch ends up ON its grabber, hulls touching or overlapping",
         "tractor_driven catch stops short and holds a clear gap, about a hull-length off",
         "the green tether particle reads as a beam on tractor_driven and as a mess on tractor_static",
     ]~~
-    visual_case("Tractor hold distance", _expect, subtitle="static tether against the driven beam - LM issue 54", notes="judge by ship NAME, not by side of frame; the two pairs MUST differ or the specimen proved nothing", data="driven standoff = 500 clear units + both hull radii; pull stiffness 1.0", hold=24)
+    visual_case("Tractor hold distance", _expect, subtitle="static tether against the driven beam - LM issue 54", notes="judge by ship NAME, not by side of frame; the two pairs MUST differ or the specimen proved nothing; the shot is fixed - the engine has no camera to pull back with", data="driven standoff = 500 clear units + both hull radii; pull stiffness 1.0", hold=24)
 
-    _anchor = visual_anchor(0, 0, 0)
-    visual_camera(_anchor, lens=(0, 5200, 0 - 7000))
+    # The action runs from the grabbers at x=0 out to the catches, so the anchor sits in the
+    # middle of it rather than on the grabbers - centering on x=0 spends half the frame on
+    # empty space behind the shot.
+    _anchor = visual_anchor(700, 0, 0)
+    visual_camera(_anchor, lens=(0, 1200, 0 - 2600))
 
     _d0 = sbs.distance_id(_d_elite.id, _d_prey.id)
 
