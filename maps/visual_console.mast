@@ -28,8 +28,21 @@
     #   4. assignment + cinematic_control (below)
     # Console name copied from LM's Game Master, the proven scripted-camera console.
     gui_activate_console("gamemaster_sci")
-    gui_update_widget_list("3dview")
-    gui_layout_widget("3dview")
+    # WHICH view is the specimen's call, not the console's. Most want the 3D camera; one
+    # about RADAR ICONS wants the 2D view, and the two cannot share a screen. Both branches
+    # REMOVE the other's widget explicitly: the page's widget list survives a rebuild, so a
+    # view left declared by the previous specimen would still be registered under this one.
+    if visual_view_is_2d():
+        _view_w = visual_view_widget()
+        gui_update_widget_list(add_widgets=_view_w, remove_widgets="3dview")
+        # Its own section, clear of the card (left) and the control bar (bottom). An engine
+        # widget draws at its own size over anything sharing its row, so it gets a row alone.
+        gui_section("area: 48, 2, 99, 88;")
+        gui_row("row-height: 1fr;")
+        gui_layout_widget(_view_w)
+    else:
+        gui_update_widget_list(add_widgets="3dview", remove_widgets=visual_view_2d_all())
+        gui_layout_widget("3dview")
     # Camera setup runs as its own TASK, not inline, because the engine wants a beat between
     # the steps: LM's Game Master waits a full second between spawning its cambot and
     # assigning a client to it, and only sets the view up after that. Doing all three inside
@@ -167,8 +180,15 @@
 
 === visual_viewport
     gui_activate_console("gamemaster_sci")
-    gui_update_widget_list("3dview")
-    gui_layout_widget("3dview")
+    if visual_view_is_2d():
+        _vp_w = visual_view_widget()
+        gui_update_widget_list(add_widgets=_vp_w, remove_widgets="3dview")
+        gui_section("area: 48, 2, 99, 88;")
+        gui_row("row-height: 1fr;")
+        gui_layout_widget(_vp_w)
+    else:
+        gui_update_widget_list(add_widgets="3dview", remove_widgets=visual_view_2d_all())
+        gui_layout_widget("3dview")
     if visual_camera_needs_setup(client_id):
         task_schedule(visual_client_camera_setup, {"cam_client": client_id})
 

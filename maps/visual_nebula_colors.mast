@@ -1,0 +1,227 @@
+# SPECIMEN: the predefined nebula palette, cloud beside icon.
+#
+# There are two different questions here and they are constantly confused for each other:
+#
+#   1. Does a cloud's RADAR ICON match the CLOUD?  The icon is derived from the entry's
+#      emission (terrain_nebula_icon_color), and the engine shader's own hue tracks
+#      normalized emission closely - so this should hold, and holding it is the whole
+#      point of deriving rather than hand-writing the icon.
+#
+#   2. Does either of them match the entry's NAME?  Nothing enforces that. The names are
+#      dictionary keys a person typed; the emission numbers were tuned separately. An
+#      entry can be perfectly self-consistent and still not be the color it is called.
+#
+# Both are put on screen at once - the cloud in 3D, its icon as a filled swatch - because
+# an answer to one has repeatedly been read as an answer to the other.
+#
+# The second specimen answers the separate question of what an emission ABOVE 1.0 does.
+
+@map/visual_nebula_colors "Visual: nebula palette"
+" Every predefined color: the cloud, and the radar icon derived from it, side by side.
+    visual_set_index_by_name("nebula_colors")
+    await task_schedule(run_visual_nebula_colors)
+    ->END
+
+
+=== run_visual_nebula_colors
+metadata: ``` yaml
+type: visual/nebula_colors
+```
+    _size = 1700
+    _pairs = []
+
+    # Spawned through terrain_setup_nebula, NOT by writing emission by hand. A specimen
+    # that restates what the library does tests the restatement; this one has to exercise
+    # the real path, because the derivation under test lives inside it.
+    for _spec in visual_neb_layout():
+        _nc = to_object(terrain_spawn(_spec[1], _spec[2], _spec[3], _spec[0], "#,visual_neb_color", "nebula", "behav_nebula"))
+        if _nc is not None:
+            _nc.data_set.set("unselectable", 0, 0)
+            terrain_setup_nebula(_nc, _size, 1.0, _spec[0], seed=_spec[4])
+            # The label under the dot. Without it the radar is seven colored circles and
+            # no way to tell which preset any of them is.
+            _nc.data_set.set("name_tag", _spec[0], 0)
+            _pairs.append([_spec[0], _nc])
+
+    # The icons, drawn big. A six-pixel radar dot is not a fair way to ask whether a color
+    # is the color it claims to be, and the swatch renders the same in both renderers.
+    visual_widgets(visual_neb_swatches())
+
+    visual_neb_report()
+
+    _anchor = visual_anchor(0, 0, 3500)
+    visual_camera(_anchor, lens=(0, 5200, 0 - 14000))
+
+    _expect = ~~[
+        "seven clouds, one per predefined color name, labelled with that name",
+        "the column on the right is each preset's RADAR ICON as a filled swatch",
+        "first question: does each swatch agree with the cloud beside it",
+        "second question: does each swatch agree with its own NAME",
+        "look hardest at yellow against green, and at red against orange",
+    ]~~
+    visual_case("Nebula palette", _expect,
+        subtitle="the derived icon, beside the cloud it was derived from",
+        notes=visual_neb_drift_text(),
+        data=visual_neb_pair_text())
+
+    visual_expect("neb palette: every preset spawned",
+        len(to_object_list(role("visual_neb_color"))) == visual_neb_count())
+    visual_expect("neb palette: a swatch per preset",
+        len(visual_widget_specs()) == visual_neb_count())
+    # The invariant the library DOES promise: a spawned cloud's icon is its preset's hue.
+    # Saturation and value are jittered per object, hue never is.
+    visual_expect("neb palette: every cloud carries its own preset hue",
+        visual_neb_icons_match(_pairs))
+    ->END
+
+
+# ---------------------------------------------------------------------------
+
+@map/visual_nebula_icons "Visual: nebula icons on 2D"
+" The same seven presets as radar dots, which is where an icon is actually read.
+    visual_set_index_by_name("nebula_icons")
+    await task_schedule(run_visual_nebula_icons)
+    ->END
+
+
+=== run_visual_nebula_icons
+metadata: ``` yaml
+type: visual/nebula_icons
+```
+    _size = 1700
+
+    # A PLAYER SHIP, because a 2D radar is not a free-floating map. The browser centres it
+    # on the client's focus and otherwise on the first PLAYER object, and the engine wants
+    # the console assigned to a ship for the view to mean anything at all. Parked between
+    # the two rows so the whole field sits on screen at once.
+    #
+    # The role is how the console finds it: it assigns the client to whatever carries
+    # `visual_client_ship`, which is already how visual_fx_client_scope puts a console on a
+    # particular hull.
+    _pship = to_object(player_spawn(0, 0, 3500, "Survey", "tsn", "tsn_battle_cruiser"))
+    ->END if _pship is None
+    add_role(_pship.id, "visual_client_ship")
+
+    # Same presets, same layout, same seeds as the palette specimen - so a dot here and a
+    # swatch there are the same object seen two ways, and can be argued about together.
+    for _ispec in visual_neb_layout():
+        _ni = to_object(terrain_spawn(_ispec[1], _ispec[2], _ispec[3], _ispec[0], "#,visual_neb_icon", "nebula", "behav_nebula"))
+        if _ni is not None:
+            # SELECTABLE on purpose. An unselectable nebula still draws its tinted dot, but
+            # cannot be clicked - and being able to click one is how you confirm which
+            # preset a dot actually is rather than inferring it from where it sits.
+            _ni.data_set.set("unselectable", 0, 0)
+            terrain_setup_nebula(_ni, _size, 1.0, _ispec[0], seed=_ispec[4])
+
+    # A MARKER per preset. THE ENGINE DRAWS NO NAME FOR A NEBULA - measured on screen, not
+    # inferred - so a nebula's own name_tag (which terrain_spawn does set) never reaches the
+    # map, and seven unlabelled dots are unreadable however right their colors are.
+    #
+    # A marker is the mechanism production already uses for exactly this: LM's nebula
+    # clusters spawn one `behav_selection` object with art beside each cluster, because a
+    # cluster needs one named thing on the map. The only change here is the TINT - the
+    # library's own marker is hardcoded gold ("I could not tell"), and these carry each
+    # preset's derived icon instead, which is the thing under test.
+    #
+    # `elite_main_scn_invis` keeps them off the main screen, as the library's do. Spawned
+    # and never freed, so this cannot hit the create-and-free-in-one-frame crash that
+    # _nebula_markers_place exists to avoid.
+    for _mspec in visual_neb_layout():
+        # The spawn NAME is the label: terrain_spawn writes name_tag itself (measured), so
+        # setting it again here would be redundant.
+        _mk = to_object(terrain_spawn(_mspec[1], _mspec[2], _mspec[3], _mspec[0], "#,visual_neb_marker,map", "generic-sphere", "behav_selection"))
+        if _mk is not None:
+            _mk.data_set.set("elite_main_scn_invis", 1, 0)
+            _mk.data_set.set("radar_color_override", _mspec[5], 0)
+
+    # No swatch column here: the console gives the 2D view the right-hand half, which is
+    # where the swatches live. The palette specimen next door is where dot and swatch meet.
+    #
+    # And NO visual_camera() - the pin is cleared between specimens, so leaving it unset is
+    # what keeps the camera from re-assigning this console away from the player ship.
+    visual_view("2dview")
+
+    # WHICH DOT IS WHICH, BY POSITION. The engine draws no name for a nebula, so the card
+    # must identify the dots itself rather than relying on anything on the map. The two rows
+    # have different counts, which names every dot without claiming which way is "back".
+    _order = visual_neb_order_text()
+
+    _expect3 = ~~[
+        "a 2D radar on the right, centred on the player ship",
+        "seven colored dots in two rows - one row of four, one row of three",
+        "each dot is tinted with the icon color derived from that preset",
+        "read these as a MAP, not as swatches - it is the icon doing its real job",
+        "red and orange should be the pair you cannot tell apart",
+        "yellow should look like a second green dot rather than a yellow one",
+    ]~~
+    visual_case("Nebula icons on 2D", _expect3,
+        subtitle="the same seven presets, as dots on a radar",
+        notes=_order,
+        data=visual_neb_pair_text())
+
+    visual_expect("neb icons: a player ship for the 2D view to centre on",
+        len(to_object_list(role("visual_client_ship"))) == 1)
+    visual_expect("neb icons: every preset spawned",
+        len(to_object_list(role("visual_neb_icon"))) == visual_neb_count())
+    # That the marker EXISTS is checkable here; whether the engine draws a label on it is
+    # not, and is not claimed. The card identifies the dots by position either way.
+    visual_expect("neb icons: a marker per preset",
+        len(to_object_list(role("visual_neb_marker"))) == visual_neb_count())
+    visual_expect("neb icons: the console was asked for a 2D view",
+        visual_view_is_2d())
+    ->END
+
+
+# ---------------------------------------------------------------------------
+
+@map/visual_nebula_emission "Visual: nebula emission over 1.0"
+" One hue at four exposures - what an emission above 1.0 does to cloud and to icon.
+    visual_set_index_by_name("nebula_emission")
+    await task_schedule(run_visual_nebula_emission)
+    ->END
+
+
+=== run_visual_nebula_emission
+metadata: ``` yaml
+type: visual/nebula_emission
+```
+    _size = 1700
+
+    # One color, four exposures of it. Everything else is held: same size, same density,
+    # same ratio between the channels. Only the overall scale moves.
+    for _espec in visual_neb_emission_specs():
+        _ne = to_object(terrain_spawn(_espec[1], _espec[2], _espec[3], _espec[0], "#,visual_neb_emission", "nebula", "behav_nebula"))
+        if _ne is not None:
+            _ne.data_set.set("unselectable", 0, 0)
+            terrain_setup_nebula(_ne, _size, 1.0, "red", seed=_espec[4])
+            _ne.data_set.set("emission_red", _espec[5])
+            _ne.data_set.set("emission_green", _espec[6])
+            _ne.data_set.set("emission_blue", _espec[7])
+            _ne.data_set.set("radar_color_override", _espec[8], 0)
+            _ne.data_set.set("nebula_data_change", 1, 0)
+            _ne.data_set.set("name_tag", _espec[0], 0)
+
+    visual_widgets(visual_neb_emission_swatches())
+
+    _anchor2 = visual_anchor(0, 0, 0)
+    visual_camera(_anchor2, lens=(0, 4200, 0 - 13000))
+
+    _expect2 = ~~[
+        "four clouds of ONE color at four exposures, left dim to right bright",
+        "the four swatches on the right should be IDENTICAL - the icon normalizes",
+        "so an emission over 1.0 is a brightness lever, not a hue lever, for the icon",
+        "but look at the CLOUDS: where a channel passes 1.0 the core has nowhere to go",
+        "the bright ones wash toward white in the middle and only keep their hue at the edge",
+    ]~~
+    visual_case("Nebula emission over 1.0", _expect2,
+        subtitle="does an emission above 1.0 change the color, or only the brightness",
+        notes=visual_neb_emission_text(),
+        data="one hue at x0.25, x1, x2, x4 - shader has no tonemap, so a channel over 1.0 clips at the target")
+
+    visual_expect("neb emission: four exposures spawned",
+        len(to_object_list(role("visual_neb_emission"))) == 4)
+    # The claim on the card, as a check: normalization is scale-invariant, so every
+    # exposure of one hue must derive the same icon.
+    visual_expect("neb emission: every exposure derives the same icon",
+        visual_neb_emission_icons_identical())
+    ->END

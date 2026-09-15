@@ -86,6 +86,55 @@ def visual_widget_specs():
     return list(_WIDGETS)
 
 
+# Which engine VIEW a specimen wants: the 3D camera view, or a 2D radar.
+#
+# They cannot share a screen. The mock activates the browser 3dview canvas and registers a
+# 2D radar rect from the same widget list, independently, so a console declaring both draws
+# them on top of each other - and in the engine the 3dview is full-bleed. One or the other.
+#
+# A 2D view is also not a free-floating map. The browser centres it on the client's focus
+# and otherwise on the first PLAYER object, and the engine wants the console assigned to a
+# ship for the view to mean anything - so a specimen asking for one must spawn a player ship
+# and tag it `visual_client_ship`, which the console already assigns to.
+#
+# Declared here rather than decided in the console, for the same reason the widgets and
+# dropdowns are: the console must not have to know which specimen is on stage.
+_VIEW = {"widget": "3dview"}
+
+_VIEW_2D = ("2dview", "science_2d_view", "comms_2d_view", "weapon_2d_view")
+
+def visual_view_2d_all():
+    """Every 2D-view widget name as the `^`-separated string gui_update_widget_list wants.
+
+    The 3D branch has to name them all: switching specimens does not clear the page's
+    widget list, so a 2D view left declared by the previous specimen would still be
+    registered under the next one's 3D camera.
+
+    A FUNCTION rather than the constant this obviously wants to be, because only functions
+    defined in a mission .py become MAST globals - a module-level string is invisible to
+    the .mast that needs it.
+    """
+    return "^".join(_VIEW_2D)
+
+
+def visual_view(widget="3dview"):
+    """Declare this specimen's engine view: '3dview', or a 2D radar widget name."""
+    _VIEW["widget"] = str(widget)
+    # The view is part of the console's BUILD, and the console repaints on the card
+    # sequence - so a declaration that did not bump it would not reach the screen until
+    # something else happened to repaint.
+    _CARD["seq"] += 1
+    return _VIEW["widget"]
+
+
+def visual_view_widget():
+    return _VIEW["widget"]
+
+
+def visual_view_is_2d():
+    return _VIEW["widget"] in _VIEW_2D
+
+
 # Dropdowns a specimen wants drawn, plus the LIVE widgets the console built from them.
 # Buttons can be declared and forgotten; a dropdown specimen is about what happens when a
 # script WRITES to one after it is on screen, so the specimen needs the widget back. The
@@ -878,6 +927,9 @@ def visual_reset_objects():
     _CARD["title"] = ""
     _CARD["data"] = ""
     _WIDGETS.clear()
+    # Back to the 3D camera view. A specimen that asked for a radar must not leave the next
+    # one - which frames a subject with a pinned camera - showing a 2D map instead.
+    _VIEW["widget"] = "3dview"
     # No pin between specimens. This used to leave dolly 0 live, so any console repaint during
     # a transition sent a camera aimed at the sentinel - which, depending on what 0 means,
     # jumps to the origin, to the parked cambot, or disables the view. A blank frame at every

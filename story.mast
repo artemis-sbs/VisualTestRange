@@ -32,6 +32,8 @@ import maps/visual_relic.mast
 import maps/visual_terrain_field.mast
 import maps/visual_scale_ladder.mast
 import maps/visual_nebula.mast
+import maps/visual_neb_palette.py
+import maps/visual_nebula_colors.mast
 import maps/visual_motion.mast
 import maps/visual_shield_rings.mast
 import maps/visual_button_chrome.mast
