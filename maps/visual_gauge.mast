@@ -1,0 +1,51 @@
+# SPECIMEN: gauges - label, value, and a bar colored by how full it is.
+#
+# The engine draws this on every status panel (Energy 946 over a green bar, FRNT SHLD
+# 45 over an orange one, the ENGN/WEAP/SHLD/SENS grid). Script GUI has no bar widget,
+# so a gauge is text plus two smallwhite rects - and whether those land UNDER their
+# label, meet without a gap, and read green/yellow/red is a question for an eye.
+
+@map/visual_gauge "Visual: gauges"
+" Gauges as text-area lines, as a text-area grid, and as live gui_gauge widgets.
+    visual_set_index_by_name("gauge")
+    await task_schedule(run_visual_gauge)
+    ->END
+
+
+=== run_visual_gauge
+metadata: ``` yaml
+type: visual/gauge
+```
+    _g_anchor = visual_anchor(0, 0, 0)
+    visual_camera(_g_anchor, lens=(0, 1200, 0 - 3800))
+
+    _g_expect = ~~[
+        "each bar sits directly UNDER its label/value line, full width of the column",
+        "Energy is GREEN, FRNT SHLD YELLOW/ORANGE, REAR SHLD RED",
+        "Homing reads '-45 / 8' with an EMPTY bar (clamped, not negative)",
+        "Cargo reads '35%'; Heat is orange because color= overrides the thresholds",
+        "the fill and the dark track meet with no gap and no overlap",
+        "the 2x2 grid: labels CENTERED, no header row, ENGN/SENS full green, WEAP yellow, SHLD red",
+        "the System/Level table: a header row, bare bars in the Level column",
+        "the three live gauges sweep down and back up; color changes as they cross 50% and 25%",
+    ]~~
+    visual_case("gauges", _g_expect, subtitle="label, value and a colored bar", notes="the engine has no bar widget; this is text + two images", data="text-area lines, a header-less grid, a header table, 3 live gui_gauge")
+
+    overlay_kind("visual_gauge", slot="fullscreen")
+
+    # Sweep the live gauges: 100 -> 0 -> 100 over the hold.
+    _g_steps = int(visual_hold(40) * 2)
+    _g_moved = False
+    for _g_i in range(_g_steps):
+        await delay_sim(0.5)
+        _g_phase = (_g_i % 40) / 40
+        _g_v = abs(1 - 2 * _g_phase) * 100
+        if visual_gauge_set("Energy", _g_v):
+            _g_moved = True
+        visual_gauge_set("FRNT SHLD", 100 - _g_v)
+        visual_gauge_set("REAR SHLD", _g_v * 0.6)
+
+    overlay_clear("fullscreen")
+    visual_expect("gauge: the live widgets were built", visual_gauge_count() == 3)
+    visual_expect("gauge: the live widgets were driven", _g_moved)
+    ->END
