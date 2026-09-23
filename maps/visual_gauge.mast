@@ -31,21 +31,19 @@ type: visual/gauge
     ]~~
     visual_case("gauges", _g_expect, subtitle="label, value and a colored bar", notes="the engine has no bar widget; this is text + two images", data="text-area lines, a header-less grid, a header table, 3 live gui_gauge")
 
-    overlay_kind("visual_gauge", slot="fullscreen")
+    overlay_kind("visual_gauge_doc", slot="visual_gauge_doc")
+    overlay_kind("visual_gauge_live", slot="visual_gauge_live")
 
-    # Sweep the live gauges: 100 -> 0 -> 100 over the hold.
+    # Sweep the live gauges: 100 -> 0 -> 100, through overlay_patch.
     _g_steps = int(visual_hold(40) * 2)
-    _g_moved = False
+    _g_before = visual_gauge_builds()
     for _g_i in range(_g_steps):
         await delay_sim(0.5)
         _g_phase = (_g_i % 40) / 40
-        _g_v = abs(1 - 2 * _g_phase) * 100
-        if visual_gauge_set("Energy", _g_v):
-            _g_moved = True
-        visual_gauge_set("FRNT SHLD", 100 - _g_v)
-        visual_gauge_set("REAR SHLD", _g_v * 0.6)
+        _g_v = int(abs(1 - 2 * _g_phase) * 100)
+        overlay_patch("visual_gauge_live", energy=_g_v, front=100 - _g_v, rear=int(_g_v * 0.6))
 
-    overlay_clear("fullscreen")
-    visual_expect("gauge: the live widgets were built", visual_gauge_count() == 3)
-    visual_expect("gauge: the live widgets were driven", _g_moved)
+    overlay_clear("visual_gauge_doc")
+    overlay_clear("visual_gauge_live")
+    visual_expect("gauge: the live slot was re-filled by the patches", visual_gauge_builds() > _g_before)
     ->END

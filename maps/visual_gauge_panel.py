@@ -9,18 +9,25 @@ rect; only an eye can say the bar sits under its label, the colors read, and the
 lines up with the engine's own ENGN/WEAP/SHLD/SENS block.
 """
 from sbs_utils.procedural.gui import (gui_row, gui_text, gui_text_area, gui_gauge,
-                                      overlay_register)
+                                      overlay_register, overlay_slot_define)
 
 LBL = "font:gui-3;color:#8cf;justify:left;"
 
-# The live widgets, so the specimen's loop can move them. One panel at a time.
-_live = {}
+# Build counter for the live slot, so the specimen can assert patches landed.
+_built = {}
 
 
-def _gauge_panel(client_id, content):
+# Two slots, because an overlay builder fills ONE layout (a gui_section inside it is
+# never presented). The document sits above the harness card (1,52..46,99); the live
+# gauges go to the right.
+overlay_slot_define("visual_gauge_doc", (1.0, 2.0, 30.0, 44.0), draw_layer=30000)
+overlay_slot_define("visual_gauge_live", (50.0, 2.0, 80.0, 30.0), draw_layer=30000)
+
+
+def _gauge_doc(client_id, content):
     gui_row("row-height: content;")
-    gui_text(f"$text:`Gauges in a text area (static)`;{LBL}")
-    gui_row("row-height: 30em;")
+    gui_text(f"$text:`text area (static)`;{LBL}")
+    gui_row("")
     gui_text_area(
         "## Artemis\n"
         "[Energy](gauge://946?max=1000)\n"
@@ -38,27 +45,25 @@ def _gauge_panel(client_id, content):
         "| System | Level |\n"
         "|:--|:--|\n"
         "| Impulse | [](gauge://80?max=100) |\n"
-        "| Warp | [](gauge://30?max=100&show=pct) |",
-        style="col-width: 22em;")
+        "| Warp | [](gauge://30?max=100&show=pct) |")
 
+
+def _gauge_live(client_id, content):
+    # Values come from the overlay's CONTENT, and the loop changes them with
+    # overlay_patch - a gauge inside a slot cannot repaint itself (the engine
+    # overdraws re-sent text), so the slot is re-filled instead.
     gui_row("row-height: content;")
-    gui_text(f"$text:`gui_gauge widgets (live - they should sweep)`;{LBL}")
-    for name in ("Energy", "FRNT SHLD", "REAR SHLD"):
+    gui_text(f"$text:`gui_gauge (live, sweeping)`;{LBL}")
+    for name, key in (("Energy", "energy"), ("FRNT SHLD", "front"), ("REAR SHLD", "rear")):
         gui_row("row-height: content;")
-        _live[name] = gui_gauge(100, 100, name, style="col-width: 22em;")
+        gui_gauge(content.get(key, 100), 100, name, show="frac")
+    _built["live"] = _built.get("live", 0) + 1
 
 
-def visual_gauge_set(name, value):
-    """Move one live gauge. Returns False when the panel is not up."""
-    g = _live.get(name)
-    if g is None:
-        return False
-    g.value = value
-    return True
+def visual_gauge_builds():
+    """How many times the live slot has been filled (1 + one per patch)."""
+    return _built.get("live", 0)
 
 
-def visual_gauge_count():
-    return len(_live)
-
-
-overlay_register("visual_gauge", _gauge_panel)
+overlay_register("visual_gauge_doc", _gauge_doc)
+overlay_register("visual_gauge_live", _gauge_live)
